@@ -5,8 +5,8 @@ import "./globals.css";
 import { AuthStoreHydrator } from "./components/auth-store-hydrator";
 
 export const metadata: Metadata = {
-  title: "YUMMYNAIL SHOP",
-  description: "Next.js로 이식한 네일샵 쇼케이스와 관리자 화면",
+  title: "Hams OAuth",
+  description: "Hams 사이트 통합 로그인 시스템",
 };
 
 export default async function RootLayout({

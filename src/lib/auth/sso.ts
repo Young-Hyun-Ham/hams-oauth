@@ -15,6 +15,7 @@ const AUTHORIZATION_CODES_COLLECTION = "sso_authorization_codes";
 const AUTHORIZATION_CODE_TTL_MS = 1000 * 60;
 
 type ConfiguredSSOClient = {
+  clientName?: string;
   clientId: string;
   clientSecret: string;
   allowedOrigins: string[];
@@ -22,6 +23,7 @@ type ConfiguredSSOClient = {
 };
 
 export type PublicSSOClient = {
+  clientName?: string;
   clientId: string;
   name: string;
   origin: string;
@@ -73,7 +75,7 @@ function normalizeUrl(value: string) {
   }
 }
 
-function getDefaultClients() {
+function getDefaultClients(): ConfiguredSSOClient[] {
   return [
     {
       clientId: "service-3001",
@@ -93,7 +95,7 @@ function getDefaultClients() {
       allowedOrigins: ["http://localhost:3003"],
       allowedRedirectUris: [],
     },
-  ] satisfies ConfiguredSSOClient[];
+  ];
 }
 
 function toClientDisplayName(clientId: string) {
@@ -117,13 +119,13 @@ function toClientOriginLabel(client: ConfiguredSSOClient) {
 
 function readConfiguredClients() {
   const raw = process.env.SSO_CLIENTS;
-
   if (!raw) {
     return getDefaultClients();
   }
 
   try {
     const parsed = JSON.parse(raw) as Array<{
+      clientName?: string;
       clientId?: string;
       clientSecret?: string;
       allowedOrigins?: string[];
@@ -133,6 +135,7 @@ function readConfiguredClients() {
     return parsed
       .filter((item) => item.clientId && item.clientSecret)
       .map((item) => ({
+        clientName: item.clientName ?? "",
         clientId: String(item.clientId),
         clientSecret: String(item.clientSecret),
         allowedOrigins: Array.isArray(item.allowedOrigins)
@@ -150,7 +153,7 @@ function readConfiguredClients() {
 export function getPublicSSOClients(): PublicSSOClient[] {
   return readConfiguredClients().map((client) => ({
     clientId: client.clientId,
-    name: toClientDisplayName(client.clientId),
+    name: client.clientName ?? toClientDisplayName(client.clientId),
     origin: toClientOriginLabel(client),
     redirectCount: client.allowedRedirectUris.length,
   }));

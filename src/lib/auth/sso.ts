@@ -78,8 +78,8 @@ function normalizeUrl(value: string) {
 function getDefaultClients(): ConfiguredSSOClient[] {
   return [
     {
-      clientId: "service-3001",
-      clientSecret: "dev-service-3001-secret",
+      clientId: "yumi-neil-shop",
+      clientSecret: "yumi-neil-secret",
       allowedOrigins: ["http://localhost:3001"],
       allowedRedirectUris: [],
     },

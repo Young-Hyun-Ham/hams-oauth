@@ -3,6 +3,7 @@ import { DashboardClient } from "@/app/components/dashboard-client";
 import { LoginForm } from "@/app/components/login-form";
 import { OAuthButtons } from "@/app/components/oauth-buttons";
 import { getSession } from "@/lib/auth/session";
+import { getPublicSSOClients } from "@/lib/auth/sso";
 
 const errorMessages: Record<string, string> = {
   invalid_provider: "지원하지 않는 OAuth provider입니다.",
@@ -21,22 +22,76 @@ export default async function LoginPage({
   const params = await searchParams;
   const errorKey = typeof params.error === "string" ? params.error : "";
   const errorMessage = errorMessages[errorKey];
+  const serviceClients = getPublicSSOClients();
 
   return (
     <main className="flex-1 bg-linear-to-b from-background via-rose-50/30 to-background px-6 py-10 md:px-10">
       <AuthStoreHydrator viewer={user} pendingOAuthSignup={null} />
 
       <section className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-4xl border border-border/60 bg-white/85 p-8 shadow-sm backdrop-blur-sm md:p-10">
-          <div className="space-y-6">
-            <div className="text-sm font-semibold uppercase tracking-[0.28em] text-primary">LOGIN</div>
-            <h1 className="max-w-3xl text-3xl font-semibold leading-tight text-foreground md:text-5xl">
-              이메일 로그인과 Google, Naver, Kakao OAuth를 지원합니다
-            </h1>
-            <p className="max-w-2xl text-base leading-8 text-muted-foreground md:text-lg">
-              소셜 로그인 시 <code>users</code> 컬렉션에서 <code>provider + email</code>로 조회하고,
-              가입된 회원이면 바로 로그인되며 처음이면 회원가입 페이지로 이동합니다.
-            </p>
+        <div className="overflow-hidden rounded-4xl border border-border/60 bg-white/90 shadow-sm backdrop-blur-sm">
+          <div className="border-b border-border/60 bg-linear-to-br from-rose-50 via-white to-amber-50/70 p-8 md:p-10">
+            <div className="space-y-6">
+              <div className="text-sm font-semibold uppercase tracking-[0.28em] text-primary">LOGIN</div>
+              <p className="max-w-3xl text-3xl font-semibold leading-tight text-foreground md:text-xl">
+                이메일 로그인과 Google, Naver, Kakao OAuth를 지원합니다
+              </p>
+              <p className="max-w-2xl text-base leading-8 text-muted-foreground md:text-lg">
+                인증 전담 사이트에서 통합 로그인 후 각 서비스 사이트로 안전하게 이동할 수 있습니다.
+                아래 목록은 현재 연결된 SSO 클라이언트입니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-5 p-8 md:p-10">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-primary/80">
+                  Connected Services
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  통합 로그인 후 접근 가능한 서비스 사이트 목록입니다.
+                </p>
+              </div>
+              <div className="rounded-full border border-primary/15 bg-primary/8 px-4 py-2 text-sm font-semibold text-primary">
+                {serviceClients.length} Sites
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {serviceClients.map((client, index) => (
+                <div
+                  key={client.clientId}
+                  className="group rounded-3xl border border-border/70 bg-gradient-to-r from-white to-rose-50/40 p-4 transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md hover:shadow-primary/5"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
+                      {String(index + 1).padStart(2, "0")}
+                    </div>
+
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg font-semibold text-foreground">
+                          {client.name}
+                        </h2>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                          {client.clientId}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 text-sm">
+                        <span className="rounded-full border border-border/70 bg-white px-3 py-1.5 font-medium text-foreground">
+                          {client.origin}
+                        </span>
+                        <span className="rounded-full border border-primary/15 bg-primary/8 px-3 py-1.5 font-medium text-primary">
+                          Redirect URI {client.redirectCount}개
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

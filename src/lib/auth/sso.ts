@@ -21,6 +21,13 @@ type ConfiguredSSOClient = {
   allowedRedirectUris: string[];
 };
 
+export type PublicSSOClient = {
+  clientId: string;
+  name: string;
+  origin: string;
+  redirectCount: number;
+};
+
 type StoredAuthorizationCode = {
   clientId: string;
   redirectUri: string;
@@ -89,6 +96,25 @@ function getDefaultClients() {
   ] satisfies ConfiguredSSOClient[];
 }
 
+function toClientDisplayName(clientId: string) {
+  return clientId
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(" ");
+}
+
+function toClientOriginLabel(client: ConfiguredSSOClient) {
+  const origin = client.allowedOrigins[0] ?? client.allowedRedirectUris[0] ?? "";
+  const parsed = normalizeUrl(origin);
+
+  if (!parsed) {
+    return origin || "Origin not configured";
+  }
+
+  return parsed.host;
+}
+
 function readConfiguredClients() {
   const raw = process.env.SSO_CLIENTS;
 
@@ -119,6 +145,15 @@ function readConfiguredClients() {
   } catch {
     return getDefaultClients();
   }
+}
+
+export function getPublicSSOClients(): PublicSSOClient[] {
+  return readConfiguredClients().map((client) => ({
+    clientId: client.clientId,
+    name: toClientDisplayName(client.clientId),
+    origin: toClientOriginLabel(client),
+    redirectCount: client.allowedRedirectUris.length,
+  }));
 }
 
 function getClient(clientId: string) {
@@ -252,7 +287,7 @@ export async function exchangeAuthorizationCode(
   const db = getDb();
 
   try {
-    const user = await db.runTransaction(async (transaction) => {
+    const user = await db.runTransaction(async (transaction: any) => {
       const docRef = db.collection(AUTHORIZATION_CODES_COLLECTION).doc(input.code);
       const snapshot = await transaction.get(docRef);
 

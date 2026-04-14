@@ -80,7 +80,7 @@ function getDefaultClients(): ConfiguredSSOClient[] {
     {
       clientId: "yumi-neil-shop",
       clientSecret: "yumi-neil-secret",
-      allowedOrigins: ["http://localhost:3001"],
+      allowedOrigins: ["http://localhost:3001","https://yumi-neil-shop.vercel.app"],
       allowedRedirectUris: [],
     },
     {

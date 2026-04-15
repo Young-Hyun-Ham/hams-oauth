@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { exchangeCodeForProfile, isOAuthProvider } from "@/lib/auth/oauth";
 import {
+  consumePostLoginRedirect,
   consumeOAuthState,
   createPendingOAuthSignup,
   createSession,
@@ -46,8 +47,13 @@ export async function GET(
       const sessionUser = toPublicUser(existingUser);
       await createSession(sessionUser);
       const ssoRedirect = await finalizePendingSSORedirect(sessionUser);
+      const postLoginRedirect = await consumePostLoginRedirect();
       return NextResponse.redirect(
-        ssoRedirect ? new URL(ssoRedirect) : new URL("/login", request.url),
+        ssoRedirect
+          ? new URL(ssoRedirect)
+          : postLoginRedirect
+            ? new URL(postLoginRedirect)
+            : new URL("/login", request.url),
       );
     }
 

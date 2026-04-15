@@ -17,9 +17,9 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = await searchParams;
   const session = await getSession();
   const user = session?.user ?? null;
-  const params = await searchParams;
   const errorKey = typeof params.error === "string" ? params.error : "";
   const errorMessage = errorMessages[errorKey];
   const serviceClients = getPublicSSOClients();

@@ -1,6 +1,11 @@
 import "server-only";
 
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  createDecipheriv,
+  createHash,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 
 import type { Firestore } from "firebase-admin/firestore";
 
@@ -54,6 +59,15 @@ type ExchangeAuthorizationCodeResult =
       status: number;
       error: string;
     };
+
+type LogoutTokenPayload = {
+  logout: true;
+  service: string;
+  returnTo: string;
+  loginStartUrl: string;
+  issuedAt: number;
+  expiresAt: number;
+};
 
 function getDb() {
   const db = getFirebaseAdminDb();
@@ -161,6 +175,71 @@ export function getPublicSSOClients(): PublicSSOClient[] {
 
 function getClient(clientId: string) {
   return readConfiguredClients().find((item) => item.clientId === clientId) ?? null;
+}
+
+function getEncryptionKey(secret: string) {
+  return createHash("sha256").update(secret).digest();
+}
+
+function decryptLogoutToken(token: string, secret: string) {
+  const [ivPart, encryptedPart, tagPart] = token.split(".");
+
+  if (!ivPart || !encryptedPart || !tagPart) {
+    return null;
+  }
+
+  try {
+    const decipher = createDecipheriv(
+      "aes-256-gcm",
+      getEncryptionKey(secret),
+      Buffer.from(ivPart, "base64url"),
+    );
+
+    decipher.setAuthTag(Buffer.from(tagPart, "base64url"));
+
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(encryptedPart, "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+
+    return JSON.parse(decrypted) as LogoutTokenPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function consumeServiceLogoutToken(token: string | null) {
+  if (!token) {
+    return null;
+  }
+
+  for (const client of readConfiguredClients()) {
+    const payload = decryptLogoutToken(token, client.clientSecret);
+
+    if (!payload) {
+      continue;
+    }
+
+    if (payload.service !== client.clientId) {
+      continue;
+    }
+
+    if (payload.expiresAt < Date.now()) {
+      return null;
+    }
+
+    if (!isAllowedRedirectUri(client, payload.loginStartUrl)) {
+      return null;
+    }
+
+    if (!isAllowedRedirectUri(client, payload.returnTo)) {
+      return null;
+    }
+
+    return payload;
+  }
+
+  return null;
 }
 
 function isAllowedRedirectUri(client: ConfiguredSSOClient, redirectUri: string) {

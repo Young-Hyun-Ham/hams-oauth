@@ -12,6 +12,7 @@ import type {
 const SESSION_COOKIE_NAME = "hams_session";
 const OAUTH_PENDING_COOKIE_NAME = "hams_pending_oauth_signup";
 const SSO_PENDING_COOKIE_NAME = "hams_pending_sso";
+const POST_LOGIN_REDIRECT_COOKIE_NAME = "hams_post_login_redirect";
 const OAUTH_STATE_COOKIE_PREFIX = "hams_oauth_state";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const OAUTH_PENDING_TTL_SECONDS = 60 * 10;
@@ -200,6 +201,42 @@ export async function clearPendingSSORequest() {
     path: "/",
     domain: getCookieDomain(),
   });
+}
+
+export async function createPostLoginRedirect(url: string) {
+  const cookieStore = await cookies();
+
+  cookieStore.set(POST_LOGIN_REDIRECT_COOKIE_NAME, encode({ url }), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: getCookieSecure(),
+    path: "/",
+    domain: getCookieDomain(),
+    maxAge: OAUTH_PENDING_TTL_SECONDS,
+  });
+}
+
+export async function consumePostLoginRedirect() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(POST_LOGIN_REDIRECT_COOKIE_NAME)?.value;
+
+  cookieStore.delete({
+    name: POST_LOGIN_REDIRECT_COOKIE_NAME,
+    path: "/",
+    domain: getCookieDomain(),
+  });
+
+  if (!token) {
+    return null;
+  }
+
+  const payload = decode<{ url?: string }>(token);
+
+  if (!payload?.url) {
+    return null;
+  }
+
+  return payload.url;
 }
 
 export async function createOAuthState(provider: OAuthProvider) {

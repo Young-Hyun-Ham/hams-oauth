@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   clearPendingOAuthSignup,
+  consumePostLoginRedirect,
   clearSession,
   createSession,
   getPendingOAuthSignup,
@@ -38,8 +39,9 @@ function validateAndHashPassword(email: string, password: string) {
 async function finishLogin(user: ReturnType<typeof toPublicUser>): Promise<never> {
   await createSession(user);
   const ssoRedirect = await finalizePendingSSORedirect(user);
+  const postLoginRedirect = await consumePostLoginRedirect();
   revalidatePath("/");
-  redirect(ssoRedirect ?? "/");
+  redirect(ssoRedirect ?? postLoginRedirect ?? "/");
 }
 
 export async function login(

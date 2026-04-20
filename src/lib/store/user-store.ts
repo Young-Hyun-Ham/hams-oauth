@@ -78,6 +78,19 @@ export async function findUserById(id: string) {
   return mapFirestoreUser(snapshot.id, snapshot.data() ?? {});
 }
 
+export async function listUsers() {
+  const db = requireDb();
+  const snapshot = await db.collection(USERS_COLLECTION).get();
+
+  return snapshot.docs
+    .map((doc) => mapFirestoreUser(doc.id, doc.data() ?? {}))
+    .sort((a, b) => {
+      const aTime = Date.parse(a.createdAt);
+      const bTime = Date.parse(b.createdAt);
+      return Number.isNaN(bTime) || Number.isNaN(aTime) ? 0 : bTime - aTime;
+    });
+}
+
 export async function findUserByLoginId(loginId: string) {
   const db = requireDb();
   const snapshot = await db

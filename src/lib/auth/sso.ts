@@ -32,6 +32,7 @@ export type PublicSSOClient = {
   clientId: string;
   name: string;
   origin: string;
+  entryUrl: string | null;
   redirectCount: number;
 };
 
@@ -169,6 +170,7 @@ export function getPublicSSOClients(): PublicSSOClient[] {
     clientId: client.clientId,
     name: client.clientName ?? toClientDisplayName(client.clientId),
     origin: toClientOriginLabel(client),
+    entryUrl: client.allowedOrigins[0] ?? client.allowedRedirectUris[0] ?? null,
     redirectCount: client.allowedRedirectUris.length,
   }));
 }

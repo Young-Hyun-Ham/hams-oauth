@@ -11,9 +11,12 @@ type CreateUserInput = {
   loginId: string;
   email: string;
   nickname: string;
+  phoneNumber: string;
   provider: AuthProvider;
   providerSubject: string | null;
   passwordHash: string | null;
+  termsVersion: string;
+  termsAcceptedAt: string;
 };
 
 function normalize(value: string) {
@@ -59,9 +62,13 @@ function mapFirestoreUser(id: string, data: Record<string, unknown>): AuthUser {
     emailLower: String(data.emailLower ?? ""),
     passwordHash: typeof data.passwordHash === "string" ? data.passwordHash : null,
     nickname: String(data.nickname ?? ""),
+    phoneNumber: String(data.phoneNumber ?? ""),
     provider: (data.provider as AuthProvider | undefined) ?? "password",
     providerSubject:
       typeof data.providerSubject === "string" ? data.providerSubject : null,
+    termsVersion: typeof data.termsVersion === "string" ? data.termsVersion : null,
+    termsAcceptedAt:
+      typeof data.termsAcceptedAt === "string" ? data.termsAcceptedAt : null,
     createdAt: serializeDate(data.createdAt, fallback),
     updatedAt: serializeDate(data.updatedAt, fallback),
   };
@@ -177,6 +184,7 @@ export async function createUser(input: CreateUserInput) {
   const loginId = input.loginId.trim();
   const email = input.email.trim();
   const nickname = input.nickname.trim();
+  const phoneNumber = input.phoneNumber.trim();
   const loginIdLower = normalize(loginId);
   const emailLower = normalize(email);
   const now = new Date().toISOString();
@@ -209,8 +217,11 @@ export async function createUser(input: CreateUserInput) {
     emailLower,
     passwordHash: input.passwordHash,
     nickname,
+    phoneNumber,
     provider: input.provider,
     providerSubject: input.providerSubject,
+    termsVersion: input.termsVersion,
+    termsAcceptedAt: input.termsAcceptedAt,
     createdAt: now,
     updatedAt: now,
   };

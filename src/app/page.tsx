@@ -1,35 +1,10 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "lucide-react";
 
-import { getSession } from "@/lib/auth/session";
+import { hasAdminAccess } from "@/lib/admin/access";
 import { isUsingFirestore, listUsers } from "@/lib/store/user-store";
 
 const USERS_PER_PAGE = 10;
-
-function getAllowedAdminEmails() {
-  const rawValue = (process.env.NEXT_PUBLIC_ACCEPT_INCLUDE ?? "").trim();
-
-  if (!rawValue) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue) as unknown;
-
-    if (Array.isArray(parsed)) {
-      return parsed
-        .map((value) => String(value).trim().toLowerCase())
-        .filter(Boolean);
-    }
-  } catch {
-    // Fallback to comma-separated values.
-  }
-
-  return rawValue
-    .split(",")
-    .map((value) => value.replace(/^\[?"?/, "").replace(/"?\]?$/, "").trim().toLowerCase())
-    .filter(Boolean);
-}
 
 function formatDate(value: string) {
   const parsed = new Date(value);
@@ -47,11 +22,7 @@ export default async function Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const session = await getSession();
-  const viewer = session?.user ?? null;
-  const allowedAdminEmails = getAllowedAdminEmails();
-  const viewerEmail = viewer?.email.trim().toLowerCase() ?? "";
-  const isAdmin = viewer ? allowedAdminEmails.includes(viewerEmail) : false;
+  const isAdmin = await hasAdminAccess();
   const users = isAdmin && isUsingFirestore() ? await listUsers() : [];
   const requestedPage = typeof params.page === "string" ? Number.parseInt(params.page, 10) : 1;
   const totalPages = Math.max(1, Math.ceil(users.length / USERS_PER_PAGE));

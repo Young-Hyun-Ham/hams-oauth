@@ -3,7 +3,7 @@ import { DashboardClient } from "@/app/components/dashboard-client";
 import { LoginForm } from "@/app/components/login-form";
 import { OAuthButtons } from "@/app/components/oauth-buttons";
 import { getSession } from "@/lib/auth/session";
-import { getPublicSSOClients } from "@/lib/auth/sso";
+import { listServiceSites } from "@/lib/store/service-site-store";
 
 const errorMessages: Record<string, string> = {
   invalid_provider: "지원하지 않는 OAuth provider입니다.",
@@ -22,7 +22,7 @@ export default async function LoginPage({
   const user = session?.user ?? null;
   const errorKey = typeof params.error === "string" ? params.error : "";
   const errorMessage = errorMessages[errorKey];
-  const serviceClients = getPublicSSOClients();
+  const serviceSites = await listServiceSites();
 
   return (
     <main className="flex-1 bg-linear-to-b from-background via-rose-50/30 to-background px-6 py-10 md:px-10">
@@ -39,8 +39,9 @@ export default async function LoginPage({
                 이메일 로그인과 Google, Naver, Kakao OAuth를 함께 지원합니다.
               </p>
               <p className="max-w-2xl text-base leading-8 text-muted-foreground md:text-lg">
-                아래 서비스 목록을 클릭하면 해당 서비스 주소로 이동할 수 있습니다. 로그인은 이
-                화면에서 진행하고, 인증이 완료되면 연결된 서비스로 이어집니다.
+                아래 서비스 목록은 관리자에서 등록한 서비스사이트입니다. 서비스를 클릭하면 해당
+                사이트로 이동할 수 있고, 서비스 로그인은 SSO 인증 전담 서버를 통해 처리할 수
+                있습니다.
               </p>
             </div>
           </div>
@@ -52,54 +53,60 @@ export default async function LoginPage({
                   Connected Services
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  통합 로그인을 사용할 수 있는 서비스 목록입니다.
+                  관리자에서 등록한 서비스사이트 목록입니다.
                 </p>
               </div>
               <div className="rounded-full border border-primary/15 bg-primary/8 px-4 py-2 text-sm font-semibold text-primary">
-                {serviceClients.length} Sites
+                {serviceSites.length} Sites
               </div>
             </div>
 
-            <div className="grid gap-3">
-              {serviceClients.map((client, index) => (
-                <a
-                  key={client.clientId}
-                  href={client.entryUrl ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-disabled={!client.entryUrl}
-                  className={`group block rounded-3xl border border-border/70 bg-gradient-to-r from-white to-rose-50/40 p-4 transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 ${
-                    client.entryUrl ? "" : "pointer-events-none opacity-60"
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
-                      {String(index + 1).padStart(2, "0")}
-                    </div>
-
-                    <div className="min-w-0 flex-1 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-lg font-semibold text-foreground">{client.name}</h2>
-                        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                          {client.clientId}
-                        </span>
+            {serviceSites.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-border/70 bg-white p-6 text-sm text-muted-foreground">
+                등록된 서비스사이트가 없습니다.
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {serviceSites.map((site, index) => (
+                  <a
+                    key={site.id}
+                    href={site.url || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-disabled={!site.url}
+                    className={`group block rounded-3xl border border-border/70 bg-gradient-to-r from-white to-rose-50/40 p-4 transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 ${
+                      site.url ? "" : "pointer-events-none opacity-60"
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
+                        {String(index + 1).padStart(2, "0")}
                       </div>
 
-                      <div className="flex flex-wrap gap-2 text-sm">
-                        <span className="rounded-full border border-border/70 bg-white px-3 py-1.5 font-medium text-foreground">
-                          {client.origin}
-                        </span>
-                        {client.entryUrl ? (
-                          <span className="rounded-full border border-primary/15 bg-primary/8 px-3 py-1.5 font-medium text-primary">
-                            서비스로 이동
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-lg font-semibold text-foreground">{site.name}</h2>
+                          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                            {site.clientId}
                           </span>
-                        ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-sm">
+                          <span className="rounded-full border border-border/70 bg-white px-3 py-1.5 font-medium text-foreground">
+                            {site.url}
+                          </span>
+                          {site.url ? (
+                            <span className="rounded-full border border-primary/15 bg-primary/8 px-3 py-1.5 font-medium text-primary">
+                              서비스로 이동
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </a>
-              ))}
-            </div>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

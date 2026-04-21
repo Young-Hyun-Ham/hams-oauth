@@ -9,8 +9,11 @@ export type AuthUser = {
   emailLower: string;
   passwordHash: string | null;
   nickname: string;
+  phoneNumber: string;
   provider: AuthProvider;
   providerSubject: string | null;
+  termsVersion: string | null;
+  termsAcceptedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };

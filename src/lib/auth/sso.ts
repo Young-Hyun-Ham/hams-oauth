@@ -9,12 +9,10 @@ import {
 
 import type { Firestore } from "firebase-admin/firestore";
 
-import {
-  clearPendingSSORequest,
-  getPendingSSORequest,
-} from "@/lib/auth/session";
+import { clearPendingSSORequest, getPendingSSORequest } from "@/lib/auth/session";
 import type { PendingSSORequest, SessionUser } from "@/lib/auth/types";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
+import { listServiceSites } from "@/lib/store/service-site-store";
 
 const AUTHORIZATION_CODES_COLLECTION = "sso_authorization_codes";
 const AUTHORIZATION_CODE_TTL_MS = 1000 * 60;
@@ -93,18 +91,21 @@ function normalizeUrl(value: string) {
 function getDefaultClients(): ConfiguredSSOClient[] {
   return [
     {
+      clientName: "Yumi Neil Shop",
       clientId: "yumi-neil-shop",
       clientSecret: "yumi-neil-secret",
-      allowedOrigins: ["https://yumi-neil-shop.vercel.app","http://localhost:3001"],
+      allowedOrigins: ["https://yumi-neil-shop.vercel.app", "http://localhost:3001"],
       allowedRedirectUris: [],
     },
     {
+      clientName: "Service 3002",
       clientId: "service-3002",
       clientSecret: "dev-service-3002-secret",
       allowedOrigins: ["http://localhost:3002"],
       allowedRedirectUris: [],
     },
     {
+      clientName: "Service 3003",
       clientId: "service-3003",
       clientSecret: "dev-service-3003-secret",
       allowedOrigins: ["http://localhost:3003"],
@@ -132,8 +133,9 @@ function toClientOriginLabel(client: ConfiguredSSOClient) {
   return parsed.host;
 }
 
-function readConfiguredClients() {
+function readConfiguredClientsFromEnv() {
   const raw = process.env.SSO_CLIENTS;
+
   if (!raw) {
     return getDefaultClients();
   }
@@ -165,8 +167,36 @@ function readConfiguredClients() {
   }
 }
 
-export function getPublicSSOClients(): PublicSSOClient[] {
-  return readConfiguredClients().map((client) => ({
+async function readConfiguredClients() {
+  const envClients = readConfiguredClientsFromEnv();
+  const serviceSites = await listServiceSites();
+  const siteClients: ConfiguredSSOClient[] = serviceSites
+    .filter((site) => site.clientId && site.clientSecret)
+    .map((site) => ({
+      clientName: site.name,
+      clientId: site.clientId,
+      clientSecret: site.clientSecret,
+      allowedOrigins: site.allowedOrigins,
+      allowedRedirectUris: site.allowedRedirectUris,
+    }));
+
+  const merged = new Map<string, ConfiguredSSOClient>();
+
+  for (const client of envClients) {
+    merged.set(client.clientId, client);
+  }
+
+  for (const client of siteClients) {
+    merged.set(client.clientId, client);
+  }
+
+  return Array.from(merged.values());
+}
+
+export async function getPublicSSOClients(): Promise<PublicSSOClient[]> {
+  const clients = await readConfiguredClients();
+
+  return clients.map((client) => ({
     clientId: client.clientId,
     name: client.clientName ?? toClientDisplayName(client.clientId),
     origin: toClientOriginLabel(client),
@@ -175,8 +205,9 @@ export function getPublicSSOClients(): PublicSSOClient[] {
   }));
 }
 
-function getClient(clientId: string) {
-  return readConfiguredClients().find((item) => item.clientId === clientId) ?? null;
+async function getClient(clientId: string) {
+  const clients = await readConfiguredClients();
+  return clients.find((item) => item.clientId === clientId) ?? null;
 }
 
 function getEncryptionKey(secret: string) {
@@ -210,12 +241,14 @@ function decryptLogoutToken(token: string, secret: string) {
   }
 }
 
-export function consumeServiceLogoutToken(token: string | null) {
+export async function consumeServiceLogoutToken(token: string | null) {
   if (!token) {
     return null;
   }
 
-  for (const client of readConfiguredClients()) {
+  const clients = await readConfiguredClients();
+
+  for (const client of clients) {
     const payload = decryptLogoutToken(token, client.clientSecret);
 
     if (!payload) {
@@ -286,8 +319,8 @@ async function storeAuthorizationCode(
   return code;
 }
 
-export function validateStartRequest(clientId: string, redirectUri: string) {
-  const client = getClient(clientId);
+export async function validateStartRequest(clientId: string, redirectUri: string) {
+  const client = await getClient(clientId);
 
   if (!client) {
     return { ok: false as const, error: "unknown_client" };
@@ -304,7 +337,7 @@ export async function createAuthorizationCodeRedirect(
   request: PendingSSORequest,
   user: SessionUser,
 ) {
-  const validation = validateStartRequest(request.clientId, request.redirectUri);
+  const validation = await validateStartRequest(request.clientId, request.redirectUri);
 
   if (!validation.ok) {
     throw new Error(validation.error);
@@ -342,7 +375,7 @@ function safeEqual(a: string, b: string) {
 export async function exchangeAuthorizationCode(
   input: ExchangeAuthorizationCodeInput,
 ): Promise<ExchangeAuthorizationCodeResult> {
-  const client = getClient(input.clientId);
+  const client = await getClient(input.clientId);
 
   if (!client) {
     return {

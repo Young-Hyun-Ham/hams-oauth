@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const validation = validateStartRequest(clientId, redirectUri);
+  const validation = await validateStartRequest(clientId, redirectUri);
 
   if (!validation.ok) {
     return NextResponse.json(

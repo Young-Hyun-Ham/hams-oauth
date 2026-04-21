@@ -5,7 +5,7 @@ import { consumeServiceLogoutToken } from "@/lib/auth/sso";
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("sso_logout_token");
-  const logoutRequest = consumeServiceLogoutToken(token);
+  const logoutRequest = await consumeServiceLogoutToken(token);
 
   if (logoutRequest?.logout) {
     await clearSession();

@@ -17,6 +17,17 @@ function readString(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function readOptionalBoolean(formData: FormData, key: string) {
+  const value = formData.get(key);
+  const isPresent = formData.get(`${key}__present`);
+
+  if (value === null && isPresent === null) {
+    return undefined;
+  }
+
+  return value === "on";
+}
+
 function parseNotice(text: string) {
   return text
     .split(/\r?\n/)
@@ -82,6 +93,7 @@ export async function saveServiceSite(formData: FormData) {
     name: readString(formData, "name"),
     url: readString(formData, "url"),
     description: readString(formData, "description"),
+    isVisible: readOptionalBoolean(formData, "isVisible"),
     clientId: readString(formData, "clientId"),
     clientSecret: readString(formData, "clientSecret"),
     allowedOriginsText: readString(formData, "allowedOriginsText"),
@@ -108,7 +120,7 @@ export async function unlockAdmin(
   const password = readString(formData, "adminPassword");
 
   if (!(await isValidAdminPassword(password))) {
-    return { message: "관리 비밀번호가 올바르지 않습니다." };
+    return { message: "관리자 비밀번호가 올바르지 않습니다." };
   }
 
   await createAdminAccess();

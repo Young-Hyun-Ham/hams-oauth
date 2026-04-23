@@ -11,6 +11,7 @@ export type ServiceSite = {
   name: string;
   url: string;
   description: string;
+  isVisible: boolean;
   clientId: string;
   clientSecret: string;
   allowedOrigins: string[];
@@ -106,6 +107,7 @@ function mapServiceSite(id: string, data: Record<string, unknown>): ServiceSite 
     name: String(data.name ?? ""),
     url: String(data.url ?? ""),
     description: String(data.description ?? ""),
+    isVisible: typeof data.isVisible === "boolean" ? data.isVisible : true,
     clientId: config.clientId,
     clientSecret: config.clientSecret,
     allowedOrigins: config.allowedOrigins,
@@ -138,6 +140,7 @@ export async function upsertServiceSite(input: {
   name: string;
   url: string;
   description: string;
+  isVisible?: boolean;
   clientId: string;
   clientSecret: string;
   allowedOriginsText: string;
@@ -150,6 +153,8 @@ export async function upsertServiceSite(input: {
   const snapshot = await ref.get();
   const allowedOrigins = parseMultilineInput(input.allowedOriginsText);
   const allowedRedirectUris = parseMultilineInput(input.allowedRedirectUrisText);
+  const isVisible =
+    input.isVisible ?? (snapshot.exists ? Boolean(snapshot.data()?.isVisible ?? true) : true);
 
   if (!input.name.trim()) {
     throw new Error("서비스사이트 이름은 필수입니다.");
@@ -184,6 +189,7 @@ export async function upsertServiceSite(input: {
     name: input.name.trim(),
     url: input.url.trim(),
     description: input.description.trim(),
+    isVisible,
     clientId: ssoConfig.clientId,
     clientSecret: ssoConfig.clientSecret,
     allowedOrigins: ssoConfig.allowedOrigins,

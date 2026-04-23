@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Globe, ScrollText, Settings } from "lucide-react";
 
 import { AdminPasswordForm } from "@/app/components/admin-password-form";
+import { VisibilityToggle } from "@/app/components/visibility-toggle";
 import {
   removeServiceSite,
   removeTermsDocument,
@@ -14,11 +15,7 @@ import {
   getAdminSecuritySettings,
 } from "@/lib/store/admin-settings-store";
 import { listTermsDocuments } from "@/lib/store/admin-terms-store";
-import {
-  buildServiceSiteSsoConfig,
-  listServiceSites,
-  stringifyServiceSiteSsoConfig,
-} from "@/lib/store/service-site-store";
+import { listServiceSites } from "@/lib/store/service-site-store";
 
 const ADMIN_TABS = [
   { key: "terms", label: "이용약관", icon: ScrollText },
@@ -60,14 +57,17 @@ export default async function AdminPage({
     listServiceSites(),
     getAdminSecuritySettings(),
   ]);
+
   const requestedTermsPage = getRequestedPage(params.page);
   const termsTotalPages = Math.max(1, termsDocuments.length);
   const currentTermsPage = Math.min(requestedTermsPage, termsTotalPages);
   const currentTermsDocument = termsDocuments[currentTermsPage - 1] ?? null;
+
   const requestedSitesPage = getRequestedPage(params.sitePage);
   const serviceSitesTotalPages = Math.max(1, serviceSites.length);
   const currentServiceSitesPage = Math.min(requestedSitesPage, serviceSitesTotalPages);
   const currentServiceSite = serviceSites[currentServiceSitesPage - 1] ?? null;
+
   const oauthVersion = process.env.npm_package_version ?? "0.1.0";
   const adminPasswordSecret = getAdminPasswordSecretPreview();
 
@@ -82,7 +82,7 @@ export default async function AdminPage({
             <div>
               <h1 className="text-3xl font-semibold text-slate-950">관리 페이지</h1>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                관리자만 접근 가능한 운영 화면입니다. 이용약관 버전, 서비스사이트, oauth 버전과 관리자 비밀번호를 관리할 수 있습니다.
+                이용약관 버전, 서비스사이트, OAuth 설정과 관리자 비밀번호를 관리합니다.
               </p>
             </div>
             <Link
@@ -121,7 +121,7 @@ export default async function AdminPage({
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-950">이용약관 등록</h2>
               <p className="mt-2 text-sm text-slate-600">
-                새 약관 버전을 추가합니다. 조항은 JSON 배열 형식으로 입력합니다.
+                새 약관 버전을 등록합니다. 조항은 JSON 배열 형식으로 입력합니다.
               </p>
 
               <form action={saveTermsDocument} className="mt-6 space-y-4">
@@ -160,8 +160,8 @@ export default async function AdminPage({
                     defaultValue={
                       termsDocuments[0]?.notice.join("\n") ??
                       [
-                        "서비스 약관은 회원가입 시점에 동의한 버전이 적용됩니다.",
-                        "약관 내용은 사전 공지 없이 변경될 수 있으므로, 정기적으로 확인해 주시기 바랍니다.",
+                        "서비스 약관은 회원가입 시점의 동의된 버전으로 적용됩니다.",
+                        "약관 내용은 사전 공지 없이 변경될 수 있으므로 정기적으로 확인해 주세요.",
                       ].join("\n")
                     }
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
@@ -187,7 +187,10 @@ export default async function AdminPage({
 
             <div className="space-y-4">
               {currentTermsDocument ? (
-                <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div
+                  key={currentTermsDocument.version}
+                  className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm"
+                >
                   <div className="flex flex-col gap-4 border-b border-slate-100 pb-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -195,7 +198,7 @@ export default async function AdminPage({
                           {currentTermsDocument.title}
                         </h3>
                         <p className="mt-1 text-sm text-slate-600">
-                          버전 {currentTermsDocument.version} · 시행일{" "}
+                          버전 {currentTermsDocument.version} / 시행일{" "}
                           {currentTermsDocument.effectiveDate}
                         </p>
                       </div>
@@ -396,7 +399,10 @@ export default async function AdminPage({
 
             <div className="space-y-4">
               {currentServiceSite ? (
-                <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div
+                  key={currentServiceSite.id}
+                  className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm"
+                >
                   <div className="flex flex-col gap-4 border-b border-slate-100 pb-4">
                     <div>
                       <h3 className="text-lg font-semibold text-slate-950">
@@ -410,9 +416,20 @@ export default async function AdminPage({
                       >
                         {currentServiceSite.url}
                       </a>
-                      <p className="mt-2 text-xs text-slate-500">
-                        수정일 {formatDate(currentServiceSite.updatedAt)}
-                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            currentServiceSite.isVisible
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {currentServiceSite.isVisible ? "노출 중" : "숨김"}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          수정일 {formatDate(currentServiceSite.updatedAt)}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
@@ -516,6 +533,10 @@ export default async function AdminPage({
                         className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                       />
                     </label>
+                    <VisibilityToggle
+                      name="isVisible"
+                      defaultChecked={currentServiceSite.isVisible}
+                    />
                     <label className="block space-y-2">
                       <span className="text-sm font-medium text-slate-900">SSO 설정 JSON</span>
                       <textarea
@@ -525,22 +546,23 @@ export default async function AdminPage({
                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-xs outline-none"
                       />
                     </label>
-                    <button
-                      type="submit"
-                      className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-                    >
-                      수정 저장
-                    </button>
-                  </form>
-
-                  <form action={removeServiceSite} className="mt-3">
-                    <input type="hidden" name="id" value={currentServiceSite.id} />
-                    <button
-                      type="submit"
-                      className="rounded-2xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
-                    >
-                      서비스사이트 삭제
-                    </button>
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        type="submit"
+                        formAction={saveServiceSite}
+                        className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                      >
+                        수정 저장
+                      </button>
+                      <button
+                        type="submit"
+                        formAction={removeServiceSite}
+                        formNoValidate
+                        className="rounded-2xl border border-rose-200 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                      >
+                        서비스사이트 삭제
+                      </button>
+                    </div>
                   </form>
                 </div>
               ) : (
@@ -556,7 +578,7 @@ export default async function AdminPage({
           <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-8">
             <h2 className="text-xl font-semibold text-slate-950">설정</h2>
             <p className="mt-2 text-sm text-slate-600">
-              현재 oauth 사이트 버전과 관리자 비밀번호 설정을 관리합니다.
+              현재 OAuth 버전과 관리자 비밀번호 설정을 관리합니다.
             </p>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -584,11 +606,11 @@ export default async function AdminPage({
                 <div>
                   <h3 className="text-lg font-semibold text-slate-950">관리자 비밀번호 설정</h3>
                   <p className="mt-2 text-sm text-slate-600">
-                    관리자 비밀번호는 DB에 직접 평문 저장하지 않고, 암호화 키가 반영된 해시 형태로 저장됩니다.
+                    관리자 비밀번호는 DB에 직접 평문 저장하지 않고, 해시 형태로 저장됩니다.
                   </p>
                 </div>
                 <p className="text-xs text-slate-500">
-                  마지막 저장: {formatDate(adminSecuritySettings.updatedAt)}
+                  마지막 변경 {formatDate(adminSecuritySettings.updatedAt)}
                 </p>
               </div>
 

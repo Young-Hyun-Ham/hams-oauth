@@ -1,5 +1,6 @@
 export type AuthProvider = "password" | "google" | "naver" | "kakao";
 export type OAuthProvider = Exclude<AuthProvider, "password">;
+export type AIChatType = "gpt" | "gemini" | "claude";
 
 export type AuthUser = {
   id: string;
@@ -10,6 +11,10 @@ export type AuthUser = {
   passwordHash: string | null;
   nickname: string;
   phoneNumber: string;
+  aiEnabled: boolean;
+  aiChatType: AIChatType | null;
+  apiKey: string | null;
+  chatModel: string | null;
   provider: AuthProvider;
   providerSubject: string | null;
   termsVersion: string | null;

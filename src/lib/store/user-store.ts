@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Timestamp } from "firebase-admin/firestore";
 
-import type { AuthProvider, AuthUser, OAuthProvider } from "@/lib/auth/types";
+import type { AIChatType, AuthProvider, AuthUser, OAuthProvider } from "@/lib/auth/types";
 import { getFirebaseAdminDb, hasFirebaseAdminConfig } from "@/lib/firebase-admin";
 
 const USERS_COLLECTION = "users";
@@ -17,6 +17,17 @@ type CreateUserInput = {
   passwordHash: string | null;
   termsVersion: string;
   termsAcceptedAt: string;
+};
+
+type UpdateUserProfileInput = {
+  id: string;
+  loginId: string;
+  nickname: string;
+  phoneNumber: string;
+  aiEnabled: boolean;
+  aiChatType: AIChatType | null;
+  apiKey: string | null;
+  chatModel: string | null;
 };
 
 function normalize(value: string) {
@@ -63,6 +74,13 @@ function mapFirestoreUser(id: string, data: Record<string, unknown>): AuthUser {
     passwordHash: typeof data.passwordHash === "string" ? data.passwordHash : null,
     nickname: String(data.nickname ?? ""),
     phoneNumber: String(data.phoneNumber ?? ""),
+    aiEnabled: typeof data.aiEnabled === "boolean" ? data.aiEnabled : false,
+    aiChatType:
+      data.aiChatType === "gpt" || data.aiChatType === "gemini" || data.aiChatType === "claude"
+        ? data.aiChatType
+        : null,
+    apiKey: typeof data.apiKey === "string" ? data.apiKey : null,
+    chatModel: typeof data.chatModel === "string" ? data.chatModel : null,
     provider: (data.provider as AuthProvider | undefined) ?? "password",
     providerSubject:
       typeof data.providerSubject === "string" ? data.providerSubject : null,
@@ -218,6 +236,10 @@ export async function createUser(input: CreateUserInput) {
     passwordHash: input.passwordHash,
     nickname,
     phoneNumber,
+    aiEnabled: false,
+    aiChatType: null,
+    apiKey: null,
+    chatModel: null,
     provider: input.provider,
     providerSubject: input.providerSubject,
     termsVersion: input.termsVersion,
@@ -229,6 +251,43 @@ export async function createUser(input: CreateUserInput) {
   await db.collection(USERS_COLLECTION).doc(user.id).set(user);
 
   return user;
+}
+
+export async function updateUserProfile(input: UpdateUserProfileInput) {
+  const db = requireDb();
+  const existingUser = await findUserById(input.id);
+
+  if (!existingUser) {
+    throw new Error("사용자 정보를 찾을 수 없습니다.");
+  }
+
+  const loginId = input.loginId.trim();
+  const nickname = input.nickname.trim();
+  const phoneNumber = input.phoneNumber.trim();
+  const loginIdLower = normalize(loginId);
+
+  const duplicateLoginId = await findUserByLoginId(loginId);
+
+  if (duplicateLoginId && duplicateLoginId.id !== existingUser.id) {
+    throw new Error("이미 사용 중인 로그인 ID입니다.");
+  }
+
+  const updatedUser: AuthUser = {
+    ...existingUser,
+    loginId,
+    loginIdLower,
+    nickname,
+    phoneNumber,
+    aiEnabled: input.aiEnabled,
+    aiChatType: input.aiEnabled ? input.aiChatType : null,
+    apiKey: input.aiEnabled ? input.apiKey : null,
+    chatModel: input.aiEnabled ? input.chatModel : null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await db.collection(USERS_COLLECTION).doc(updatedUser.id).set(updatedUser);
+
+  return updatedUser;
 }
 
 export function isUsingFirestore() {

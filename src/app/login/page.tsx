@@ -22,7 +22,7 @@ export default async function LoginPage({
   const user = session?.user ?? null;
   const errorKey = typeof params.error === "string" ? params.error : "";
   const errorMessage = errorMessages[errorKey];
-  const serviceSites = await listServiceSites();
+  const serviceSites = (await listServiceSites()).filter((site) => site.isVisible);
 
   return (
     <main className="flex-1 bg-linear-to-b from-background via-rose-50/30 to-background px-6 py-10 md:px-10">

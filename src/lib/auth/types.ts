@@ -25,7 +25,17 @@ export type AuthUser = {
 
 export type PublicUser = Pick<
   AuthUser,
-  "id" | "loginId" | "email" | "nickname" | "provider" | "createdAt" | "updatedAt"
+  | "id"
+  | "loginId"
+  | "email"
+  | "nickname"
+  | "provider"
+  | "createdAt"
+  | "updatedAt"
+  | "aiEnabled"
+  | "aiChatType"
+  | "apiKey"
+  | "chatModel"
 >;
 
 export type SessionUser = PublicUser;
@@ -44,15 +54,17 @@ export type PendingSSORequest = {
 };
 
 export function toPublicUser(user: AuthUser): PublicUser {
-  const { id, loginId, email, nickname, provider, createdAt, updatedAt } = user;
-
   return {
-    id,
-    loginId,
-    email,
-    nickname,
-    provider,
-    createdAt,
-    updatedAt,
+    id: user.id,
+    loginId: user.loginId,
+    email: user.email,
+    nickname: user.nickname,
+    provider: user.provider,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    aiEnabled: user.aiEnabled,
+    aiChatType: user.aiChatType,
+    apiKey: user.apiKey,
+    chatModel: user.chatModel,
   };
 }

@@ -1,9 +1,11 @@
+// hams-oauth/src/lib/store/user-store.ts
 import { randomUUID } from "node:crypto";
 
 import type { Timestamp } from "firebase-admin/firestore";
 
 import type { AIChatType, AuthProvider, AuthUser, OAuthProvider } from "@/lib/auth/types";
 import { getFirebaseAdminDb, hasFirebaseAdminConfig } from "@/lib/firebase-admin";
+import { decryptApiKey, encryptApiKey } from "@/lib/security/api-key";
 
 const USERS_COLLECTION = "users";
 
@@ -79,7 +81,7 @@ function mapFirestoreUser(id: string, data: Record<string, unknown>): AuthUser {
       data.aiChatType === "gpt" || data.aiChatType === "gemini" || data.aiChatType === "claude"
         ? data.aiChatType
         : null,
-    apiKey: typeof data.apiKey === "string" ? data.apiKey : null,
+    apiKey: decryptApiKey(typeof data.apiKey === "string" ? data.apiKey : null),
     chatModel: typeof data.chatModel === "string" ? data.chatModel : null,
     provider: (data.provider as AuthProvider | undefined) ?? "password",
     providerSubject:
@@ -248,7 +250,10 @@ export async function createUser(input: CreateUserInput) {
     updatedAt: now,
   };
 
-  await db.collection(USERS_COLLECTION).doc(user.id).set(user);
+  await db.collection(USERS_COLLECTION).doc(user.id).set({
+    ...user,
+    apiKey: null,
+  });
 
   return user;
 }
@@ -272,6 +277,8 @@ export async function updateUserProfile(input: UpdateUserProfileInput) {
     throw new Error("이미 사용 중인 로그인 ID입니다.");
   }
 
+  const encryptedApiKey = input.aiEnabled ? encryptApiKey(input.apiKey) : null;
+
   const updatedUser: AuthUser = {
     ...existingUser,
     loginId,
@@ -285,7 +292,10 @@ export async function updateUserProfile(input: UpdateUserProfileInput) {
     updatedAt: new Date().toISOString(),
   };
 
-  await db.collection(USERS_COLLECTION).doc(updatedUser.id).set(updatedUser);
+  await db.collection(USERS_COLLECTION).doc(updatedUser.id).set({
+    ...updatedUser,
+    apiKey: encryptedApiKey,
+  });
 
   return updatedUser;
 }

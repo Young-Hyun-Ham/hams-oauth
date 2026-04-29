@@ -300,6 +300,17 @@ export async function updateUserProfile(input: UpdateUserProfileInput) {
   return updatedUser;
 }
 
+export async function deleteUserById(id: string) {
+  const db = requireDb();
+  const existingUser = await findUserById(id);
+
+  if (!existingUser) {
+    throw new Error("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎.");
+  }
+
+  await db.collection(USERS_COLLECTION).doc(id).delete();
+}
+
 export function isUsingFirestore() {
   return hasFirebaseAdminConfig();
 }

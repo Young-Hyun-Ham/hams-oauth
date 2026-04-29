@@ -17,6 +17,7 @@ import { toPublicUser, type AIChatType } from "@/lib/auth/types";
 import { getCurrentTermsDocument } from "@/lib/store/admin-terms-store";
 import {
   createUser,
+  deleteUserById,
   findPasswordUserByIdentifier,
   findUserById,
   updateUserProfile,
@@ -228,4 +229,37 @@ export async function updateProfile(
         error instanceof Error ? error.message : "회원정보 수정 중 오류가 발생했습니다.",
     };
   }
+}
+
+export async function deleteAccount(
+  _state: AuthActionState | undefined,
+  _formData: FormData,
+): Promise<AuthActionState> {
+  const session = await getSession();
+
+  if (!session?.userId) {
+    redirect("/login");
+  }
+
+  const existingUser = await findUserById(session.userId);
+
+  if (!existingUser) {
+    await clearSession();
+    redirect("/login");
+  }
+
+  try {
+    await deleteUserById(existingUser.id);
+    await clearSession();
+    revalidatePath("/");
+    revalidatePath("/login");
+    revalidatePath("/profile");
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error ? error.message : "회원 삭제 중 오류가 발생했습니다.",
+    };
+  }
+
+  redirect("/login");
 }

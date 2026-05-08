@@ -36,6 +36,8 @@ export type PublicUser = Pick<
   | "aiChatType"
   | "apiKey"
   | "chatModel"
+  | "phoneNumber"
+  | "termsVersion"
 >;
 
 export type SessionUser = PublicUser;
@@ -66,5 +68,7 @@ export function toPublicUser(user: AuthUser): PublicUser {
     aiChatType: user.aiChatType,
     apiKey: user.apiKey,
     chatModel: user.chatModel,
+    phoneNumber: user.phoneNumber,
+    termsVersion: user.termsVersion,
   };
 }

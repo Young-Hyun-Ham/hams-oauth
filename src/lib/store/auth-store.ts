@@ -2,13 +2,13 @@
 
 import { create } from "zustand";
 
-import type { PendingOAuthSignup, PublicUser } from "@/lib/auth/types";
+import type { PendingOAuthSignup, SessionUser } from "@/lib/auth/types";
 
 type AuthStoreState = {
-  viewer: PublicUser | null;
+  viewer: SessionUser | null;
   pendingOAuthSignup: PendingOAuthSignup | null;
   hydrate: (input: {
-    viewer: PublicUser | null;
+    viewer: SessionUser | null;
     pendingOAuthSignup: PendingOAuthSignup | null;
   }) => void;
   clearPendingOAuthSignup: () => void;

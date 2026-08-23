@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createPendingSSORequest, getSession } from "@/lib/auth/session";
 import { createAuthorizationCodeRedirect, validateStartRequest } from "@/lib/auth/sso";
+import { toSessionUser } from "@/lib/auth/types";
 
 export async function GET(request: NextRequest) {
   const clientId = request.nextUrl.searchParams.get("client_id")?.trim() ?? "";
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
         redirectUri,
         state,
       },
-      session.user,
+      toSessionUser(session.user),
     );
 
     return NextResponse.redirect(redirectTo);

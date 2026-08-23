@@ -40,7 +40,7 @@ export type PublicUser = Pick<
   | "termsVersion"
 >;
 
-export type SessionUser = PublicUser;
+export type SessionUser = Omit<PublicUser, "apiKey">;
 
 export type PendingOAuthSignup = {
   provider: OAuthProvider;
@@ -67,6 +67,25 @@ export function toPublicUser(user: AuthUser): PublicUser {
     aiEnabled: user.aiEnabled,
     aiChatType: user.aiChatType,
     apiKey: user.apiKey,
+    chatModel: user.chatModel,
+    phoneNumber: user.phoneNumber,
+    termsVersion: user.termsVersion,
+  };
+}
+
+export function toSessionUser(
+  user: AuthUser | PublicUser | SessionUser,
+): SessionUser {
+  return {
+    id: user.id,
+    loginId: user.loginId,
+    email: user.email,
+    nickname: user.nickname,
+    provider: user.provider,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    aiEnabled: user.aiEnabled,
+    aiChatType: user.aiChatType,
     chatModel: user.chatModel,
     phoneNumber: user.phoneNumber,
     termsVersion: user.termsVersion,

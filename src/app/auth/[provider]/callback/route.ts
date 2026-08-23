@@ -8,7 +8,7 @@ import {
   createSession,
 } from "@/lib/auth/session";
 import { finalizePendingSSORedirect } from "@/lib/auth/sso";
-import { toPublicUser } from "@/lib/auth/types";
+import { toSessionUser } from "@/lib/auth/types";
 import { findOAuthUserByEmail } from "@/lib/store/user-store";
 
 export async function GET(
@@ -44,7 +44,7 @@ export async function GET(
     const existingUser = await findOAuthUserByEmail(profile.provider, profile.email);
 
     if (existingUser) {
-      const sessionUser = toPublicUser(existingUser);
+      const sessionUser = toSessionUser(existingUser);
       await createSession(sessionUser);
       const ssoRedirect = await finalizePendingSSORedirect(sessionUser);
       const postLoginRedirect = await consumePostLoginRedirect();

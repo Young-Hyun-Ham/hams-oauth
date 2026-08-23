@@ -3,13 +3,13 @@
 import { useEffect } from "react";
 
 import { useAuthStore } from "@/lib/store/auth-store";
-import type { PendingOAuthSignup, PublicUser } from "@/lib/auth/types";
+import type { PendingOAuthSignup, SessionUser } from "@/lib/auth/types";
 
 export function AuthStoreHydrator({
   viewer,
   pendingOAuthSignup,
 }: {
-  viewer: PublicUser | null;
+  viewer: SessionUser | null;
   pendingOAuthSignup: PendingOAuthSignup | null;
 }) {
   const hydrate = useAuthStore((state) => state.hydrate);

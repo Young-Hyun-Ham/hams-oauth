@@ -13,7 +13,11 @@ import {
   getPendingOAuthSignup,
 } from "@/lib/auth/session";
 import { finalizePendingSSORedirect } from "@/lib/auth/sso";
-import { toPublicUser, type AIChatType } from "@/lib/auth/types";
+import {
+  toPublicUser,
+  toSessionUser,
+  type AIChatType,
+} from "@/lib/auth/types";
 import { getCurrentTermsDocument } from "@/lib/store/admin-terms-store";
 import {
   createUser,
@@ -53,8 +57,9 @@ function validateAndHashPassword(email: string, password: string) {
 }
 
 async function finishLogin(user: ReturnType<typeof toPublicUser>): Promise<never> {
-  await createSession(user);
-  const ssoRedirect = await finalizePendingSSORedirect(user);
+  const sessionUser = toSessionUser(user);
+  await createSession(sessionUser);
+  const ssoRedirect = await finalizePendingSSORedirect(sessionUser);
   const postLoginRedirect = await consumePostLoginRedirect();
   revalidatePath("/");
   redirect(ssoRedirect ?? postLoginRedirect ?? "/");
@@ -217,7 +222,7 @@ export async function updateProfile(
       chatModel: chatModel || null,
     });
 
-    await createSession(toPublicUser(user));
+    await createSession(toSessionUser(user));
     revalidatePath("/");
     revalidatePath("/login");
     revalidatePath("/profile");

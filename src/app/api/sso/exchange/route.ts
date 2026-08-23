@@ -46,5 +46,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     user: result.user,
+    access_token: result.accessToken,
+    token_type: "Bearer",
+    expires_in: result.expiresIn,
   });
 }

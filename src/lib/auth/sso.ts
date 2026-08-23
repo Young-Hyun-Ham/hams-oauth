@@ -11,6 +11,7 @@ import type { Firestore } from "firebase-admin/firestore";
 
 import { clearPendingSSORequest, getPendingSSORequest } from "@/lib/auth/session";
 import type { PendingSSORequest, SessionUser } from "@/lib/auth/types";
+import { createServiceAccessToken } from "@/lib/auth/service-access-token";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { listServiceSites } from "@/lib/store/service-site-store";
 
@@ -52,6 +53,8 @@ type ExchangeAuthorizationCodeResult =
   | {
       ok: true;
       user: SessionUser;
+      accessToken: string;
+      expiresIn: number;
     }
   | {
       ok: false;
@@ -435,9 +438,17 @@ export async function exchangeAuthorizationCode(
       return data.user;
     });
 
+    const { accessToken, expiresIn } = createServiceAccessToken({
+      clientId: input.clientId,
+      userId: user.id,
+      scopes: ["ai:models", "ai:generate"],
+    });
+
     return {
       ok: true,
       user,
+      accessToken,
+      expiresIn,
     };
   } catch (error) {
     return {

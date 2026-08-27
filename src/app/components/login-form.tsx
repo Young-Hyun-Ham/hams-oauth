@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { X } from "lucide-react";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { login, type AuthActionState } from "@/app/actions/auth";
-import { unlockAdmin, type AdminUnlockState } from "@/app/actions/admin";
+import { AdminUnlockModal } from "@/app/components/admin-unlock-modal";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -27,12 +26,13 @@ function Message({ state }: { state: AuthActionState | undefined }) {
     return null;
   }
 
-  return <p className="text-sm font-medium text-destructive">{state.message}</p>;
+  return (
+    <p className="text-sm font-medium text-destructive">{state.message}</p>
+  );
 }
 
 export function LoginForm() {
   const [state, action] = useActionState(login, undefined);
-  const [adminState, adminAction] = useActionState(unlockAdmin, undefined);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
 
   return (
@@ -49,7 +49,9 @@ export function LoginForm() {
         </div>
 
         <label className="block space-y-2">
-          <span className="text-sm font-medium text-foreground">로그인 ID / 이메일</span>
+          <span className="text-sm font-medium text-foreground">
+            로그인 ID / 이메일
+          </span>
           <input
             name="identifier"
             required
@@ -75,7 +77,10 @@ export function LoginForm() {
         <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
           <p>
             아직 계정이 없으시면{" "}
-            <Link className="font-medium text-primary underline underline-offset-4" href="/signup">
+            <Link
+              className="font-medium text-primary underline underline-offset-4"
+              href="/signup"
+            >
               회원가입
             </Link>
           </p>
@@ -90,6 +95,12 @@ export function LoginForm() {
       </form>
 
       {isAdminModalOpen ? (
+        <AdminUnlockModal
+          returnPath="/admin"
+          onClose={() => setIsAdminModalOpen(false)}
+        />
+      ) : null}
+      {/*
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6">
           <div className="w-full max-w-md rounded-[2rem] bg-background p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
@@ -134,7 +145,7 @@ export function LoginForm() {
             </form>
           </div>
         </div>
-      ) : null}
+      */}
     </>
   );
 }

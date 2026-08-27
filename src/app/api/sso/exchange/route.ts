@@ -10,7 +10,9 @@ type ExchangeRequestBody = {
 };
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as ExchangeRequestBody | null;
+  const body = (await request
+    .json()
+    .catch(() => null)) as ExchangeRequestBody | null;
   const clientId = body?.client_id?.trim() ?? "";
   const clientSecret = body?.client_secret?.trim() ?? "";
   const code = body?.code?.trim() ?? "";

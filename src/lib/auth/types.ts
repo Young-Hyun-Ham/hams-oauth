@@ -1,6 +1,17 @@
 export type AuthProvider = "password" | "google" | "naver" | "kakao";
 export type OAuthProvider = Exclude<AuthProvider, "password">;
 export type AIChatType = "gpt" | "gemini" | "claude";
+export type Gender = "male" | "female" | "other" | "prefer_not_to_say";
+export type ServicePlan = "basic" | "standard" | "premium";
+
+export type ServiceMembership = {
+  serviceSiteId: string;
+  clientId: string;
+  serviceName: string;
+  plan: ServicePlan;
+  monthlyPrice: number;
+  joinedAt: string;
+};
 
 export type AuthUser = {
   id: string;
@@ -11,6 +22,10 @@ export type AuthUser = {
   passwordHash: string | null;
   nickname: string;
   phoneNumber: string;
+  birthDate: string | null;
+  gender: Gender | null;
+  hampoBalance: number;
+  serviceMemberships: ServiceMembership[];
   aiEnabled: boolean;
   aiChatType: AIChatType | null;
   apiKey: string | null;
@@ -37,6 +52,10 @@ export type PublicUser = Pick<
   | "apiKey"
   | "chatModel"
   | "phoneNumber"
+  | "birthDate"
+  | "gender"
+  | "hampoBalance"
+  | "serviceMemberships"
   | "termsVersion"
 >;
 
@@ -47,6 +66,7 @@ export type PendingOAuthSignup = {
   email: string;
   nickname: string;
   providerSubject: string;
+  birthDate: string | null;
 };
 
 export type PendingSSORequest = {
@@ -69,6 +89,10 @@ export function toPublicUser(user: AuthUser): PublicUser {
     apiKey: user.apiKey,
     chatModel: user.chatModel,
     phoneNumber: user.phoneNumber,
+    birthDate: user.birthDate,
+    gender: user.gender,
+    hampoBalance: user.hampoBalance,
+    serviceMemberships: user.serviceMemberships,
     termsVersion: user.termsVersion,
   };
 }
@@ -88,6 +112,10 @@ export function toSessionUser(
     aiChatType: user.aiChatType,
     chatModel: user.chatModel,
     phoneNumber: user.phoneNumber,
+    birthDate: user.birthDate,
+    gender: user.gender,
+    hampoBalance: user.hampoBalance,
+    serviceMemberships: user.serviceMemberships,
     termsVersion: user.termsVersion,
   };
 }

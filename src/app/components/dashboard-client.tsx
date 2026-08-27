@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
 
-import { unlockAdmin, type AdminUnlockState } from "@/app/actions/admin";
 import { logout } from "@/app/actions/auth";
+import { AdminUnlockModal } from "@/app/components/admin-unlock-modal";
+import { HampoChargeModal } from "@/app/components/hampo-charge-modal";
 import { useAuthStore } from "@/lib/store/auth-store";
 
+/*
 function AdminUnlockSubmitButton() {
   const { pending } = useFormStatus();
 
@@ -30,10 +31,11 @@ function AdminUnlockMessage({ state }: { state: AdminUnlockState | undefined }) 
   return <p className="text-sm font-medium text-destructive">{state.message}</p>;
 }
 
+*/
 export function DashboardClient() {
   const viewer = useAuthStore((store) => store.viewer);
+  const [isHampoModalOpen, setIsHampoModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
-  const [adminState, adminAction] = useActionState(unlockAdmin, undefined);
 
   if (!viewer) {
     return null;
@@ -74,7 +76,33 @@ export function DashboardClient() {
           </div>
         </dl>
 
+        <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+                MY HAMPO
+              </p>
+              <p className="mt-2 text-2xl font-bold text-foreground">
+                {(viewer.hampoBalance ?? 0).toLocaleString("ko-KR")} 함포
+              </p>
+            </div>
+            <p className="text-right text-xs leading-5 text-muted-foreground">
+              1함포 = 100원
+              <br />
+              서비스 요금 결제에 사용
+            </p>
+          </div>
+        </div>
+
         <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setIsHampoModalOpen(true)}
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-primary bg-primary/5 px-5 py-3.5 text-sm font-semibold text-primary transition hover:bg-primary/10"
+          >
+            포인트 충전 · 1함포는 100원
+          </button>
+
           <Link
             href="/profile"
             className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/50"
@@ -103,7 +131,18 @@ export function DashboardClient() {
         </div>
       </section>
 
+      {isHampoModalOpen ? (
+        <HampoChargeModal onClose={() => setIsHampoModalOpen(false)} />
+      ) : null}
+
       {isAdminModalOpen ? (
+        <AdminUnlockModal
+          returnPath="/admin"
+          onClose={() => setIsAdminModalOpen(false)}
+        />
+      ) : null}
+      {/*
+      {false ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6">
           <div className="w-full max-w-md rounded-[2rem] border border-border bg-background p-6 shadow-2xl">
             <div className="space-y-2">
@@ -146,6 +185,7 @@ export function DashboardClient() {
           </div>
         </div>
       ) : null}
+      */}
     </>
   );
 }

@@ -17,8 +17,16 @@ export type ServiceSite = {
   allowedOrigins: string[];
   allowedRedirectUris: string[];
   ssoConfigText: string;
+  isFixedPricing: boolean;
+  prices: ServiceSitePrices;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ServiceSitePrices = {
+  basic: number;
+  standard: number;
+  premium: number;
 };
 
 export type ServiceSiteSsoConfig = {
@@ -72,6 +80,10 @@ function parseMultilineInput(value: string) {
     .filter(Boolean);
 }
 
+function normalizePrice(value: unknown) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
 export function buildServiceSiteSsoConfig(input: {
   name: string;
   clientId: string;
@@ -102,6 +114,12 @@ function mapServiceSite(id: string, data: Record<string, unknown>): ServiceSite 
     allowedRedirectUris: normalizeStringArray(data.allowedRedirectUris),
   });
 
+  const prices = {
+    basic: normalizePrice((data.prices as Record<string, unknown> | undefined)?.basic),
+    standard: normalizePrice((data.prices as Record<string, unknown> | undefined)?.standard),
+    premium: normalizePrice((data.prices as Record<string, unknown> | undefined)?.premium),
+  };
+
   return {
     id,
     name: String(data.name ?? ""),
@@ -116,6 +134,11 @@ function mapServiceSite(id: string, data: Record<string, unknown>): ServiceSite 
       typeof data.ssoConfigText === "string" && data.ssoConfigText
         ? data.ssoConfigText
         : stringifyServiceSiteSsoConfig(config),
+    isFixedPricing:
+      typeof data.isFixedPricing === "boolean"
+        ? data.isFixedPricing
+        : Object.values(prices).some((price) => price > 0),
+    prices,
     createdAt: serializeDate(data.createdAt, now),
     updatedAt: serializeDate(data.updatedAt, now),
   };
@@ -145,6 +168,8 @@ export async function upsertServiceSite(input: {
   clientSecret: string;
   allowedOriginsText: string;
   allowedRedirectUrisText: string;
+  isFixedPricing: boolean;
+  prices?: ServiceSitePrices;
 }) {
   const db = requireDb();
   const id = input.id?.trim() || randomUUID();
@@ -176,6 +201,21 @@ export async function upsertServiceSite(input: {
     throw new Error("allowedOrigins는 최소 1개 이상 필요합니다.");
   }
 
+  if (input.isFixedPricing) {
+    if (!input.prices) {
+      throw new Error("가격 정찰제를 사용하려면 요금을 모두 입력해 주세요.");
+    }
+    for (const [plan, price] of Object.entries(input.prices)) {
+      if (!Number.isSafeInteger(price) || price < 0) {
+        throw new Error(`${plan} 요금은 0 이상의 정수여야 합니다.`);
+      }
+    }
+  }
+
+  const existingPrices = snapshot.exists
+    ? mapServiceSite(snapshot.id, snapshot.data() ?? {}).prices
+    : { basic: 0, standard: 0, premium: 0 };
+
   const ssoConfig = buildServiceSiteSsoConfig({
     name: input.name,
     clientId: input.clientId,
@@ -195,12 +235,44 @@ export async function upsertServiceSite(input: {
     allowedOrigins: ssoConfig.allowedOrigins,
     allowedRedirectUris: ssoConfig.allowedRedirectUris,
     ssoConfigText: stringifyServiceSiteSsoConfig(ssoConfig),
+    isFixedPricing: input.isFixedPricing,
+    prices: input.prices ?? existingPrices,
     createdAt: snapshot.exists ? snapshot.data()?.createdAt ?? now : now,
     updatedAt: now,
   });
 }
 
-export async function deleteServiceSite(id: string) {
+export async function deleteServiceSite(input: {
+  id: string;
+  confirmName: string;
+  confirmClientId: string;
+  confirmation: string;
+  acknowledged: boolean;
+}) {
   const db = requireDb();
-  await db.collection(SERVICE_SITES_COLLECTION).doc(id).delete();
+  const id = input.id.trim();
+
+  if (!id || !input.acknowledged || input.confirmation !== "DELETE") {
+    throw new Error("삭제 확인 절차를 모두 완료해 주세요.");
+  }
+
+  const ref = db.collection(SERVICE_SITES_COLLECTION).doc(id);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) {
+      throw new Error("삭제할 서비스사이트를 찾을 수 없습니다.");
+    }
+
+    const data = snapshot.data() ?? {};
+    const name = String(data.name ?? "");
+    const clientId = String(data.clientId ?? "");
+    if (data.isVisible !== false) {
+      throw new Error("서비스사이트를 먼저 비노출 상태로 저장한 후 삭제해 주세요.");
+    }
+    if (input.confirmName !== name || input.confirmClientId !== clientId) {
+      throw new Error("서비스사이트 이름 또는 Client ID가 일치하지 않습니다.");
+    }
+
+    transaction.delete(ref);
+  });
 }

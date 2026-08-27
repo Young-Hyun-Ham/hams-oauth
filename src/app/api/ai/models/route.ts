@@ -8,7 +8,9 @@ type ModelOption = {
 };
 
 function normalizeProvider(value: unknown): AIChatType | null {
-  return value === "gpt" || value === "gemini" || value === "claude" ? value : null;
+  return value === "gpt" || value === "gemini" || value === "claude"
+    ? value
+    : null;
 }
 
 async function fetchOpenAIModels(apiKey: string): Promise<ModelOption[]> {
@@ -55,7 +57,9 @@ async function fetchGeminiModels(apiKey: string): Promise<ModelOption[]> {
   };
 
   return (payload.models ?? [])
-    .filter((model) => model.supportedGenerationMethods?.includes("generateContent"))
+    .filter((model) =>
+      model.supportedGenerationMethods?.includes("generateContent"),
+    )
     .map((model) => {
       const id = (model.name ?? "").replace(/^models\//, "").trim();
       const label = model.displayName?.trim() || id;
@@ -112,11 +116,17 @@ export async function POST(request: Request) {
     const apiKey = payload.apiKey?.trim() ?? "";
 
     if (!provider) {
-      return NextResponse.json({ message: "AI Chat type을 선택해 주세요." }, { status: 400 });
+      return NextResponse.json(
+        { message: "AI Chat type을 선택해 주세요." },
+        { status: 400 },
+      );
     }
 
     if (!apiKey) {
-      return NextResponse.json({ message: "API KEY를 입력해 주세요." }, { status: 400 });
+      return NextResponse.json(
+        { message: "API KEY를 입력해 주세요." },
+        { status: 400 },
+      );
     }
 
     const models = await fetchModels(provider, apiKey);
@@ -126,7 +136,9 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message:
-          error instanceof Error ? error.message : "모델 목록 조회 중 오류가 발생했습니다.",
+          error instanceof Error
+            ? error.message
+            : "모델 목록 조회 중 오류가 발생했습니다.",
       },
       { status: 500 },
     );

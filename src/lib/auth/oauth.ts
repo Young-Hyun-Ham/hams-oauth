@@ -4,6 +4,37 @@ import type { OAuthProvider, PendingOAuthSignup } from "@/lib/auth/types";
 
 type OAuthProfile = PendingOAuthSignup;
 
+function formatBirthDate(year: unknown, month: unknown, day: unknown) {
+  const yearText = String(year ?? "").trim();
+  const monthText = String(month ?? "").replace(/\D/g, "").padStart(2, "0");
+  const dayText = String(day ?? "").replace(/\D/g, "").padStart(2, "0");
+
+  if (!/^\d{4}$/.test(yearText) || !/^\d{2}$/.test(monthText) || !/^\d{2}$/.test(dayText)) {
+    return null;
+  }
+
+  const value = `${yearText}-${monthText}-${dayText}`;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+    ? value
+    : null;
+}
+
+async function getGoogleBirthDate(accessToken: string) {
+  try {
+    const response = await axios.get(
+      "https://people.googleapis.com/v1/people/me?personFields=birthdays",
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const birthday = Array.isArray(response.data.birthdays)
+      ? response.data.birthdays.find((item: { date?: unknown }) => item?.date)?.date
+      : null;
+    return formatBirthDate(birthday?.year, birthday?.month, birthday?.day);
+  } catch {
+    return null;
+  }
+}
+
 const providerLabels: Record<OAuthProvider, string> = {
   google: "Google",
   naver: "Naver",
@@ -44,7 +75,10 @@ export function getOAuthAuthorizationUrl(
     params.set("client_id", clientId);
     params.set("redirect_uri", redirectUri);
     params.set("response_type", "code");
-    params.set("scope", "openid email profile");
+    params.set(
+      "scope",
+      "openid email profile https://www.googleapis.com/auth/user.birthday.read",
+    );
     params.set("state", state);
     params.set("prompt", "select_account");
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
@@ -61,7 +95,7 @@ export function getOAuthAuthorizationUrl(
   params.set("client_id", clientId);
   params.set("redirect_uri", redirectUri);
   params.set("response_type", "code");
-  params.set("scope", "account_email profile_nickname");
+  params.set("scope", "account_email profile_nickname birthday birthyear");
   params.set("state", state);
   return `https://kauth.kakao.com/oauth/authorize?${params.toString()}`;
 }
@@ -117,6 +151,7 @@ async function getGoogleProfile(code: string, origin: string): Promise<OAuthProf
     String(profileResponse.data.name ?? "").trim() ||
     email.split("@")[0] ||
     "google-user";
+  const birthDate = await getGoogleBirthDate(accessToken);
 
   if (!email || !providerSubject) {
     throw new Error("Google 계정에서 이메일 또는 식별자를 가져오지 못했습니다.");
@@ -127,6 +162,7 @@ async function getGoogleProfile(code: string, origin: string): Promise<OAuthProf
     email,
     nickname,
     providerSubject,
+    birthDate,
   };
 }
 
@@ -161,6 +197,7 @@ async function getNaverProfile(
     String(profile.nickname ?? profile.name ?? "").trim() ||
     email.split("@")[0] ||
     "naver-user";
+  const [birthMonth, birthDay] = String(profile.birthday ?? "").split("-");
 
   if (!email || !providerSubject) {
     throw new Error("Naver 계정에서 이메일 또는 식별자를 가져오지 못했습니다.");
@@ -171,6 +208,7 @@ async function getNaverProfile(
     email,
     nickname,
     providerSubject,
+    birthDate: formatBirthDate(profile.birthyear, birthMonth, birthDay),
   };
 }
 
@@ -205,6 +243,7 @@ async function getKakaoProfile(code: string, origin: string): Promise<OAuthProfi
   const providerSubject = String(profileResponse.data.id ?? "");
   const nickname =
     String(profile.nickname ?? "").trim() || email.split("@")[0] || "kakao-user";
+  const birthday = String(account.birthday ?? "");
 
   if (!email || !providerSubject) {
     throw new Error("Kakao 계정에서 이메일 또는 식별자를 가져오지 못했습니다.");
@@ -215,5 +254,10 @@ async function getKakaoProfile(code: string, origin: string): Promise<OAuthProfi
     email,
     nickname,
     providerSubject,
+    birthDate: formatBirthDate(
+      account.birthyear,
+      birthday.slice(0, 2),
+      birthday.slice(2, 4),
+    ),
   };
 }

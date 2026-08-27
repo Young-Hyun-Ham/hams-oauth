@@ -28,7 +28,8 @@ export function OAuthButtons() {
       <div className="space-y-2">
         <h2 className="text-2xl font-semibold text-foreground">소셜 로그인</h2>
         <p className="text-sm leading-6 text-muted-foreground">
-          가입된 계정이면 바로 로그인되고, 처음이면 회원가입 페이지로 이동합니다.
+          가입된 계정이면 바로 로그인되고, 처음이면 회원가입 페이지로
+          이동합니다.
         </p>
       </div>
 

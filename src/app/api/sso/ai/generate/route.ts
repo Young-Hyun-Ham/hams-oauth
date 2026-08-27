@@ -11,7 +11,8 @@ export const maxDuration = 120;
 
 const validModel = (value: string) =>
   /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
-const validSchemaName = (value: string) => /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value);
+const validSchemaName = (value: string) =>
+  /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value);
 
 export async function POST(request: Request) {
   const access = verifyServiceAccessToken(
@@ -49,7 +50,9 @@ export async function POST(request: Request) {
     const schemaName =
       typeof body.schemaName === "string" ? body.schemaName.trim() : "";
     const schema =
-      body.schema && typeof body.schema === "object" && !Array.isArray(body.schema)
+      body.schema &&
+      typeof body.schema === "object" &&
+      !Array.isArray(body.schema)
         ? (body.schema as Record<string, unknown>)
         : null;
     const maxOutputTokens =
@@ -123,7 +126,8 @@ export async function POST(request: Request) {
       );
     }
     const timeout = error instanceof Error && error.name === "TimeoutError";
-    if (!timeout) console.error("Failed to generate service AI response", error);
+    if (!timeout)
+      console.error("Failed to generate service AI response", error);
     return NextResponse.json(
       {
         ok: false,

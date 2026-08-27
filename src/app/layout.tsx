@@ -19,7 +19,7 @@ export default async function RootLayout({
 
   return (
     <html lang="ko" className="h-full antialiased">
-      <body className="min-h-full">  
+      <body className="min-h-full">
         <AuthStoreHydrator viewer={user} pendingOAuthSignup={null} />
         {children}
       </body>

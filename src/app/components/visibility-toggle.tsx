@@ -18,7 +18,9 @@ export function VisibilityToggle({
         <span className="text-sm font-medium text-slate-900">노출여부</span>
         <span
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            checked ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"
+            checked
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-slate-100 text-slate-600"
           }`}
         >
           {checked ? "현재 ON" : "현재 OFF"}
@@ -36,8 +38,8 @@ export function VisibilityToggle({
           </p>
           <p className="text-xs text-slate-500">
             {checked
-              ? "로그인 화면의 서비스 목록에 노출됩니다."
-              : "로그인 화면의 서비스 목록에서 숨겨집니다."}
+              ? "로그인 없이 서비스사이트를 둘러 볼 수 있습니다."
+              : "로그인을 해야만 서비스사이트 이용이 가능 합니다."}
           </p>
         </div>
 

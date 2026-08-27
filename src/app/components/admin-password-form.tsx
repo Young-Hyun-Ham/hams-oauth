@@ -38,7 +38,11 @@ function PasswordField({
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-900"
             aria-label={visible ? "비밀번호 숨기기" : "비밀번호 보기"}
           >
-            {visible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            {visible ? (
+              <EyeOff className="h-5 w-5" />
+            ) : (
+              <Eye className="h-5 w-5" />
+            )}
           </button>
         ) : null}
       </div>
@@ -48,7 +52,10 @@ function PasswordField({
 
 export function AdminPasswordForm() {
   return (
-    <form action={changeAdminPassword} className="mt-6 grid gap-4 md:grid-cols-2">
+    <form
+      action={changeAdminPassword}
+      className="mt-6 grid gap-4 md:grid-cols-2"
+    >
       <PasswordField
         name="nextAdminPassword"
         label="새 관리자 비밀번호"

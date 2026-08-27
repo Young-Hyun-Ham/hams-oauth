@@ -3,29 +3,37 @@ import { randomUUID } from "node:crypto";
 
 import type { Timestamp } from "firebase-admin/firestore";
 
-import type { AIChatType, AuthProvider, AuthUser, OAuthProvider } from "@/lib/auth/types";
+import type { AIChatType, AuthProvider, AuthUser, Gender, OAuthProvider, ServiceMembership } from "@/lib/auth/types";
 import { getFirebaseAdminDb, hasFirebaseAdminConfig } from "@/lib/firebase-admin";
 import { decryptApiKey, encryptApiKey } from "@/lib/security/api-key";
 
 const USERS_COLLECTION = "users";
+const HAMPO_CHARGE_HISTORIES_COLLECTION = "hampo_charge_histories";
+const HAMPO_UNIT_PRICE = 100;
 
 type CreateUserInput = {
   loginId: string;
   email: string;
   nickname: string;
   phoneNumber: string;
+  birthDate: string;
+  gender: Gender;
   provider: AuthProvider;
   providerSubject: string | null;
   passwordHash: string | null;
   termsVersion: string;
   termsAcceptedAt: string;
+  serviceMemberships?: ServiceMembership[];
 };
 
 type UpdateUserProfileInput = {
   id: string;
-  loginId: string;
   nickname: string;
   phoneNumber: string;
+  birthDate: string;
+  gender: Gender;
+  passwordHash?: string;
+  serviceMemberships: ServiceMembership[];
   aiEnabled: boolean;
   aiChatType: AIChatType | null;
   apiKey: string | null;
@@ -76,6 +84,21 @@ function mapFirestoreUser(id: string, data: Record<string, unknown>): AuthUser {
     passwordHash: typeof data.passwordHash === "string" ? data.passwordHash : null,
     nickname: String(data.nickname ?? ""),
     phoneNumber: String(data.phoneNumber ?? ""),
+    birthDate: typeof data.birthDate === "string" ? data.birthDate : null,
+    gender:
+      data.gender === "male" ||
+      data.gender === "female" ||
+      data.gender === "other" ||
+      data.gender === "prefer_not_to_say"
+        ? data.gender
+        : null,
+    hampoBalance:
+      typeof data.hampoBalance === "number" && Number.isSafeInteger(data.hampoBalance)
+        ? Math.max(0, data.hampoBalance)
+        : 0,
+    serviceMemberships: Array.isArray(data.serviceMemberships)
+      ? (data.serviceMemberships as ServiceMembership[])
+      : [],
     aiEnabled: typeof data.aiEnabled === "boolean" ? data.aiEnabled : false,
     aiChatType:
       data.aiChatType === "gpt" || data.aiChatType === "gemini" || data.aiChatType === "claude"
@@ -140,7 +163,6 @@ export async function findPasswordUserByIdentifier(identifier: string) {
 
   const byLoginId = await db
     .collection(USERS_COLLECTION)
-    .where("provider", "==", "password")
     .where("loginIdLower", "==", normalized)
     .limit(1)
     .get();
@@ -152,7 +174,6 @@ export async function findPasswordUserByIdentifier(identifier: string) {
 
   const byEmail = await db
     .collection(USERS_COLLECTION)
-    .where("provider", "==", "password")
     .where("emailLower", "==", normalized)
     .limit(1)
     .get();
@@ -170,6 +191,22 @@ export async function findPasswordUserByEmail(email: string) {
   const snapshot = await db
     .collection(USERS_COLLECTION)
     .where("provider", "==", "password")
+    .where("emailLower", "==", normalize(email))
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) {
+    return null;
+  }
+
+  const doc = snapshot.docs[0];
+  return mapFirestoreUser(doc.id, doc.data() ?? {});
+}
+
+export async function findUserByEmail(email: string) {
+  const db = requireDb();
+  const snapshot = await db
+    .collection(USERS_COLLECTION)
     .where("emailLower", "==", normalize(email))
     .limit(1)
     .get();
@@ -205,6 +242,7 @@ export async function createUser(input: CreateUserInput) {
   const email = input.email.trim();
   const nickname = input.nickname.trim();
   const phoneNumber = input.phoneNumber.trim();
+  const birthDate = input.birthDate.trim();
   const loginIdLower = normalize(loginId);
   const emailLower = normalize(email);
   const now = new Date().toISOString();
@@ -215,18 +253,10 @@ export async function createUser(input: CreateUserInput) {
     throw new Error("이미 사용 중인 로그인 ID입니다.");
   }
 
-  if (input.provider === "password") {
-    const duplicatePasswordUser = await findPasswordUserByEmail(email);
+  const duplicateEmailUser = await findUserByEmail(email);
 
-    if (duplicatePasswordUser) {
-      throw new Error("이미 가입한 이메일입니다.");
-    }
-  } else {
-    const duplicateOAuthUser = await findOAuthUserByEmail(input.provider, email);
-
-    if (duplicateOAuthUser) {
-      throw new Error("이미 가입한 소셜 계정입니다.");
-    }
+  if (duplicateEmailUser) {
+    throw new Error("이미 가입된 이메일입니다.");
   }
 
   const user: AuthUser = {
@@ -238,6 +268,10 @@ export async function createUser(input: CreateUserInput) {
     passwordHash: input.passwordHash,
     nickname,
     phoneNumber,
+    birthDate,
+    gender: input.gender,
+    hampoBalance: 0,
+    serviceMemberships: input.serviceMemberships ?? [],
     aiEnabled: false,
     aiChatType: null,
     apiKey: null,
@@ -266,25 +300,19 @@ export async function updateUserProfile(input: UpdateUserProfileInput) {
     throw new Error("사용자 정보를 찾을 수 없습니다.");
   }
 
-  const loginId = input.loginId.trim();
   const nickname = input.nickname.trim();
   const phoneNumber = input.phoneNumber.trim();
-  const loginIdLower = normalize(loginId);
-
-  const duplicateLoginId = await findUserByLoginId(loginId);
-
-  if (duplicateLoginId && duplicateLoginId.id !== existingUser.id) {
-    throw new Error("이미 사용 중인 로그인 ID입니다.");
-  }
 
   const encryptedApiKey = input.aiEnabled ? encryptApiKey(input.apiKey) : null;
 
   const updatedUser: AuthUser = {
     ...existingUser,
-    loginId,
-    loginIdLower,
     nickname,
     phoneNumber,
+    birthDate: input.birthDate,
+    gender: input.gender,
+    passwordHash: input.passwordHash ?? existingUser.passwordHash,
+    serviceMemberships: input.serviceMemberships,
     aiEnabled: input.aiEnabled,
     aiChatType: input.aiEnabled ? input.aiChatType : null,
     apiKey: input.aiEnabled ? input.apiKey : null,
@@ -309,6 +337,57 @@ export async function deleteUserById(id: string) {
   }
 
   await db.collection(USERS_COLLECTION).doc(id).delete();
+}
+
+export async function chargeUserHampo(id: string, amount: number) {
+  const db = requireDb();
+  const userRef = db.collection(USERS_COLLECTION).doc(id);
+  const historyRef = db
+    .collection(HAMPO_CHARGE_HISTORIES_COLLECTION)
+    .doc(randomUUID());
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(userRef);
+
+    if (!snapshot.exists) {
+      throw new Error("사용자 정보를 찾을 수 없습니다.");
+    }
+
+    const currentValue = snapshot.data()?.hampoBalance;
+    const currentBalance =
+      typeof currentValue === "number" && Number.isSafeInteger(currentValue)
+        ? Math.max(0, currentValue)
+        : 0;
+    const nextBalance = currentBalance + amount;
+
+    if (!Number.isSafeInteger(nextBalance)) {
+      throw new Error("보유 가능한 함포 한도를 초과했습니다.");
+    }
+
+    const createdAt = new Date().toISOString();
+
+    transaction.update(userRef, {
+      hampoBalance: nextBalance,
+      updatedAt: createdAt,
+    });
+    transaction.set(historyRef, {
+      id: historyRef.id,
+      userId: id,
+      email: String(snapshot.data()?.email ?? ""),
+      type: "charge",
+      status: "completed",
+      amount,
+      previousBalance: currentBalance,
+      balanceAfter: nextBalance,
+      unitPrice: HAMPO_UNIT_PRICE,
+      paymentAmount: amount * HAMPO_UNIT_PRICE,
+      paymentStatus: "not_linked",
+      source: "temporary_manual_charge",
+      createdAt,
+    });
+
+    return nextBalance;
+  });
 }
 
 export function isUsingFirestore() {

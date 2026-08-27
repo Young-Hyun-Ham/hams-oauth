@@ -10,11 +10,17 @@ export async function GET(
   const { provider } = await context.params;
 
   if (!isOAuthProvider(provider)) {
-    return NextResponse.redirect(new URL("/login?error=invalid_provider", request.url));
+    return NextResponse.redirect(
+      new URL("/login?error=invalid_provider", request.url),
+    );
   }
 
   const state = await createOAuthState(provider);
-  const authUrl = getOAuthAuthorizationUrl(provider, request.nextUrl.origin, state);
+  const authUrl = getOAuthAuthorizationUrl(
+    provider,
+    request.nextUrl.origin,
+    state,
+  );
 
   return NextResponse.redirect(authUrl);
 }

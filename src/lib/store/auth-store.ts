@@ -12,6 +12,7 @@ type AuthStoreState = {
     pendingOAuthSignup: PendingOAuthSignup | null;
   }) => void;
   clearPendingOAuthSignup: () => void;
+  setHampoBalance: (balance: number) => void;
 };
 
 export const useAuthStore = create<AuthStoreState>((set) => ({
@@ -26,4 +27,8 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
     set({
       pendingOAuthSignup: null,
     }),
+  setHampoBalance: (hampoBalance) =>
+    set((state) => ({
+      viewer: state.viewer ? { ...state.viewer, hampoBalance } : null,
+    })),
 }));

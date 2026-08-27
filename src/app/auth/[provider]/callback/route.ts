@@ -18,7 +18,9 @@ export async function GET(
   const { provider } = await context.params;
 
   if (!isOAuthProvider(provider)) {
-    return NextResponse.redirect(new URL("/login?error=invalid_provider", request.url));
+    return NextResponse.redirect(
+      new URL("/login?error=invalid_provider", request.url),
+    );
   }
 
   const code = request.nextUrl.searchParams.get("code");
@@ -26,11 +28,15 @@ export async function GET(
   const isValidState = await consumeOAuthState(provider, state);
 
   if (!isValidState) {
-    return NextResponse.redirect(new URL("/login?error=invalid_state", request.url));
+    return NextResponse.redirect(
+      new URL("/login?error=invalid_state", request.url),
+    );
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL("/login?error=missing_code", request.url));
+    return NextResponse.redirect(
+      new URL("/login?error=missing_code", request.url),
+    );
   }
 
   try {
@@ -41,7 +47,10 @@ export async function GET(
       request.nextUrl.origin,
     );
 
-    const existingUser = await findOAuthUserByEmail(profile.provider, profile.email);
+    const existingUser = await findOAuthUserByEmail(
+      profile.provider,
+      profile.email,
+    );
 
     if (existingUser) {
       const sessionUser = toSessionUser(existingUser);
@@ -60,6 +69,8 @@ export async function GET(
     await createPendingOAuthSignup(profile);
     return NextResponse.redirect(new URL("/signup", request.url));
   } catch {
-    return NextResponse.redirect(new URL("/login?error=oauth_failed", request.url));
+    return NextResponse.redirect(
+      new URL("/login?error=oauth_failed", request.url),
+    );
   }
 }

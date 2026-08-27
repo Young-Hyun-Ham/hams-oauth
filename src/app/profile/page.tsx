@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ProfileForm } from "@/app/components/profile-form";
 import { getSession } from "@/lib/auth/session";
 import { findUserById } from "@/lib/store/user-store";
+import { listServiceSites } from "@/lib/store/service-site-store";
 
 export default async function ProfilePage() {
   const session = await getSession();
@@ -17,6 +18,15 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
+  const serviceSites = (await listServiceSites()).map((site) => ({
+    id: site.id,
+    clientId: site.clientId,
+    name: site.name,
+    description: site.description,
+    isFixedPricing: site.isFixedPricing,
+    prices: site.prices,
+  }));
+
   return (
     <main className="flex-1 bg-linear-to-b from-background via-rose-50/30 to-background px-6 py-10 md:px-10">
       <section className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-2">
@@ -26,15 +36,60 @@ export default async function ProfilePage() {
               PROFILE
             </div>
             <h1 className="max-w-3xl text-3xl font-semibold leading-tight text-foreground md:text-5xl">
-              회원정보를 직접 수정할 수 있습니다.
+              회원정보 수정
             </h1>
-            <p className="max-w-2xl text-base leading-8 text-muted-foreground md:text-lg">
-              현재 계정의 로그인 ID, 닉네임, 전화번호를 변경하고 바로 반영할 수 있습니다.
+            <p className="text-sm leading-6 text-muted-foreground">
+              사용할 서비스와 월 이용요금을 확인해 주세요. 1함포는 100원입니다.
             </p>
+            <div className="space-y-4 pt-2">
+              {serviceSites.map((site) => (
+                <div
+                  key={site.id}
+                  className="rounded-3xl border border-border/70 bg-background/70 p-5"
+                >
+                  <h2 className="font-semibold text-foreground">{site.name}</h2>
+                  {site.description ? (
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {site.description}
+                    </p>
+                  ) : null}
+                  {site.isFixedPricing ? (
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      {(["basic", "standard", "premium"] as const).map(
+                        (plan) => (
+                          <div
+                            key={plan}
+                            className="rounded-2xl border border-border/60 bg-white p-3 text-center"
+                          >
+                            <p className="text-[11px] font-semibold uppercase text-muted-foreground">
+                              {plan}
+                            </p>
+                            <p className="mt-1 text-sm font-bold text-foreground">
+                              {site.prices[plan].toLocaleString("ko-KR")}원
+                            </p>
+                            <p className="mt-1 text-[11px] text-primary">
+                              {(site.prices[plan] / 100).toLocaleString(
+                                "ko-KR",
+                                { maximumFractionDigits: 2 },
+                              )}
+                              함포
+                            </p>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      정찰제 요금을 사용하지 않는 서비스입니다.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        <ProfileForm user={user} />
+        <ProfileForm user={user} serviceSites={serviceSites} />
       </section>
     </main>
   );

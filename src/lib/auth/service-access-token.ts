@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { findUserById } from "@/lib/store/user-store";
+
 export type ServiceAccessScope = "ai:models" | "ai:generate";
 
 type ServiceAccessTokenPayload = {
@@ -100,6 +102,22 @@ export function verifyServiceAccessToken(
   } catch {
     return null;
   }
+}
+
+export async function verifyActiveServiceAccessToken(
+  token: string | null | undefined,
+  requiredScope: ServiceAccessScope,
+) {
+  const access = verifyServiceAccessToken(token, requiredScope);
+  if (!access) return null;
+
+  const user = await findUserById(access.userId);
+  const membership = user?.serviceMemberships.find(
+    (item) => item.clientId === access.clientId,
+  );
+  if (membership?.status === "refund_pending") return null;
+
+  return access;
 }
 
 export function readBearerToken(request: Request) {

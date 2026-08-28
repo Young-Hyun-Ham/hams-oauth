@@ -17,7 +17,14 @@ import {
   deleteServiceSite,
   upsertServiceSite,
 } from "@/lib/store/service-site-store";
-import { listUsers } from "@/lib/store/user-store";
+import {
+  chargeUserHampo,
+  completeUserServiceRefund,
+  deleteUserById,
+  findUserById,
+  listUsers,
+  updateUserByAdmin,
+} from "@/lib/store/user-store";
 
 function readString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -249,4 +256,204 @@ export async function getAdminUserSummaries() {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   }));
+}
+
+function getUserAdminPath(
+  formData: FormData,
+  values: Record<string, string | undefined> = {},
+) {
+  const requestedPage = Number.parseInt(readString(formData, "userPage"), 10);
+  const query = new URLSearchParams({
+    tab: "users",
+    userPage: String(
+      Number.isSafeInteger(requestedPage) && requestedPage > 0
+        ? requestedPage
+        : 1,
+    ),
+  });
+
+  for (const [key, value] of Object.entries(values)) {
+    if (value) query.set(key, value);
+  }
+
+  return `/admin?${query.toString()}`;
+}
+
+export async function saveAdminUser(formData: FormData) {
+  await requireAdminAccess();
+  const id = readString(formData, "id");
+  const genderValue = readString(formData, "gender");
+  const gender =
+    genderValue === "male" ||
+    genderValue === "female" ||
+    genderValue === "other" ||
+    genderValue === "prefer_not_to_say"
+      ? genderValue
+      : null;
+
+  try {
+    await updateUserByAdmin({
+      id,
+      loginId: readString(formData, "loginId"),
+      email: readString(formData, "email"),
+      nickname: readString(formData, "nickname"),
+      phoneNumber: readString(formData, "phoneNumber"),
+      birthDate: readString(formData, "birthDate") || null,
+      gender,
+    });
+  } catch (error) {
+    redirect(
+      getUserAdminPath(formData, {
+        userId: id,
+        userMode: "edit",
+        userError:
+          error instanceof Error
+            ? error.message
+            : "회원정보 수정 중 오류가 발생했습니다.",
+      }),
+    );
+  }
+
+  revalidatePath("/admin");
+  redirect(
+    getUserAdminPath(formData, {
+      userId: id,
+      userMessage: "회원정보를 수정했습니다.",
+    }),
+  );
+}
+
+export async function chargeAdminUserHampo(formData: FormData) {
+  await requireAdminAccess();
+  const id = readString(formData, "id");
+  const rawAmount = readString(formData, "amount");
+  const amount = Number(rawAmount);
+
+  if (!/^\d+$/.test(rawAmount) || !Number.isSafeInteger(amount) || amount < 1) {
+    redirect(
+      getUserAdminPath(formData, {
+        userId: id,
+        userMode: "charge",
+        userError: "충전할 함포를 1 이상 정수로 입력해 주세요.",
+      }),
+    );
+  }
+
+  if (amount > 1_000_000) {
+    redirect(
+      getUserAdminPath(formData, {
+        userId: id,
+        userMode: "charge",
+        userError: "한 번에 최대 1,000,000함포까지 충전할 수 있습니다.",
+      }),
+    );
+  }
+
+  try {
+    await chargeUserHampo(id, amount, "admin_manual_charge");
+  } catch (error) {
+    redirect(
+      getUserAdminPath(formData, {
+        userId: id,
+        userMode: "charge",
+        userError:
+          error instanceof Error
+            ? error.message
+            : "함포 충전 중 오류가 발생했습니다.",
+      }),
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/login");
+  redirect(
+    getUserAdminPath(formData, {
+      userId: id,
+      userMessage: `${amount.toLocaleString("ko-KR")}함포를 충전했습니다.`,
+    }),
+  );
+}
+
+export type CompleteAdminHampoRefundState = {
+  ok?: boolean;
+  message?: string;
+  refundedAmount?: number;
+};
+
+export async function completeAdminHampoRefund(
+  _state: CompleteAdminHampoRefundState | undefined,
+  formData: FormData,
+): Promise<CompleteAdminHampoRefundState> {
+  await requireAdminAccess();
+
+  try {
+    const refundRequestId = readString(formData, "refundRequestId");
+    if (!refundRequestId) {
+      return { ok: false, message: "환불 요청 ID가 없습니다." };
+    }
+    if (formData.get("refundConfirmed") !== "on") {
+      return {
+        ok: false,
+        message: "일할 계산 환불금과 서비스 해지 내용을 확인해 주세요.",
+      };
+    }
+
+    const result = await completeUserServiceRefund({
+      refundRequestId,
+      adminMemo: readString(formData, "adminMemo"),
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/login");
+    revalidatePath("/profile/services");
+    return {
+      ok: true,
+      message: `${result.refundedAmount.toLocaleString("ko-KR")}함포 환불을 완료했습니다.`,
+      refundedAmount: result.refundedAmount,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "환불 처리 중 오류가 발생했습니다.",
+    };
+  }
+}
+
+export async function removeAdminUser(formData: FormData) {
+  await requireAdminAccess();
+  const id = readString(formData, "id");
+  const user = await findUserById(id);
+
+  if (!user) {
+    redirect(
+      getUserAdminPath(formData, {
+        userError: "회원정보를 찾을 수 없습니다.",
+      }),
+    );
+  }
+
+  if (
+    formData.get("deleteAcknowledged") !== "on" ||
+    readString(formData, "deleteConfirmation").toLowerCase() !==
+      user.email.toLowerCase()
+  ) {
+    redirect(
+      getUserAdminPath(formData, {
+        userId: id,
+        userMode: "delete",
+        userError: "삭제 확인에 체크하고 회원 이메일을 정확히 입력해 주세요.",
+      }),
+    );
+  }
+
+  await deleteUserById(id);
+  revalidatePath("/admin");
+  redirect(
+    getUserAdminPath(formData, {
+      userMessage: "회원정보를 삭제했습니다.",
+    }),
+  );
 }

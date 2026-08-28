@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   readBearerToken,
-  verifyServiceAccessToken,
+  verifyActiveServiceAccessToken,
 } from "@/lib/auth/service-access-token";
 import { AiServiceError, generateUserAiResponse } from "@/lib/ai/service-ai";
 
@@ -15,7 +15,7 @@ const validSchemaName = (value: string) =>
   /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value);
 
 export async function POST(request: Request) {
-  const access = verifyServiceAccessToken(
+  const access = await verifyActiveServiceAccessToken(
     readBearerToken(request),
     "ai:generate",
   );

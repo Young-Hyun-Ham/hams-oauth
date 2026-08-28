@@ -9,7 +9,10 @@ import {
 
 import type { Firestore } from "firebase-admin/firestore";
 
-import { clearPendingSSORequest, getPendingSSORequest } from "@/lib/auth/session";
+import {
+  clearPendingSSORequest,
+  getPendingSSORequest,
+} from "@/lib/auth/session";
 import type { PendingSSORequest, SessionUser } from "@/lib/auth/types";
 import { createServiceAccessToken } from "@/lib/auth/service-access-token";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
@@ -97,7 +100,10 @@ function getDefaultClients(): ConfiguredSSOClient[] {
       clientName: "Yumi Neil Shop",
       clientId: "yumi-neil-shop",
       clientSecret: "yumi-neil-secret",
-      allowedOrigins: ["https://yumi-neil-shop.vercel.app", "http://localhost:3001"],
+      allowedOrigins: [
+        "https://yumi-neil-shop.vercel.app",
+        "http://localhost:3001",
+      ],
       allowedRedirectUris: [],
     },
     {
@@ -114,6 +120,13 @@ function getDefaultClients(): ConfiguredSSOClient[] {
       allowedOrigins: ["http://localhost:3003"],
       allowedRedirectUris: [],
     },
+    {
+      clientName: "HAMS Planning Board",
+      clientId: "hams-planning-board",
+      clientSecret: "hams-planning-board-client-secret",
+      allowedOrigins: ["http://localhost:3005"],
+      allowedRedirectUris: [],
+    },
   ];
 }
 
@@ -126,7 +139,8 @@ function toClientDisplayName(clientId: string) {
 }
 
 function toClientOriginLabel(client: ConfiguredSSOClient) {
-  const origin = client.allowedOrigins[0] ?? client.allowedRedirectUris[0] ?? "";
+  const origin =
+    client.allowedOrigins[0] ?? client.allowedRedirectUris[0] ?? "";
   const parsed = normalizeUrl(origin);
 
   if (!parsed) {
@@ -280,7 +294,10 @@ export async function consumeServiceLogoutToken(token: string | null) {
   return null;
 }
 
-function isAllowedRedirectUri(client: ConfiguredSSOClient, redirectUri: string) {
+function isAllowedRedirectUri(
+  client: ConfiguredSSOClient,
+  redirectUri: string,
+) {
   const parsed = normalizeUrl(redirectUri);
 
   if (!parsed) {
@@ -312,17 +329,23 @@ async function storeAuthorizationCode(
 ) {
   const code = randomUUID();
 
-  await db.collection(AUTHORIZATION_CODES_COLLECTION).doc(code).set({
-    clientId: request.clientId,
-    redirectUri: request.redirectUri,
-    user,
-    expiresAt: Date.now() + AUTHORIZATION_CODE_TTL_MS,
-  } satisfies StoredAuthorizationCode);
+  await db
+    .collection(AUTHORIZATION_CODES_COLLECTION)
+    .doc(code)
+    .set({
+      clientId: request.clientId,
+      redirectUri: request.redirectUri,
+      user,
+      expiresAt: Date.now() + AUTHORIZATION_CODE_TTL_MS,
+    } satisfies StoredAuthorizationCode);
 
   return code;
 }
 
-export async function validateStartRequest(clientId: string, redirectUri: string) {
+export async function validateStartRequest(
+  clientId: string,
+  redirectUri: string,
+) {
   const client = await getClient(clientId);
 
   if (!client) {
@@ -336,11 +359,40 @@ export async function validateStartRequest(clientId: string, redirectUri: string
   return { ok: true as const, client };
 }
 
+export async function getValidatedServiceReturnUrl(
+  clientId: string | undefined,
+  returnTo: string | undefined,
+) {
+  const normalizedClientId = clientId?.trim() ?? "";
+  const normalizedReturnTo = returnTo?.trim() ?? "";
+
+  if (!normalizedClientId || !normalizedReturnTo) {
+    return null;
+  }
+
+  const validation = await validateStartRequest(
+    normalizedClientId,
+    normalizedReturnTo,
+  );
+
+  return validation.ok ? new URL(normalizedReturnTo).toString() : null;
+}
+
 export async function createAuthorizationCodeRedirect(
   request: PendingSSORequest,
   user: SessionUser,
 ) {
-  const validation = await validateStartRequest(request.clientId, request.redirectUri);
+  const membership = user.serviceMemberships.find(
+    (item) => item.clientId === request.clientId,
+  );
+  if (membership?.status === "refund_pending") {
+    throw new Error("service_refund_pending");
+  }
+
+  const validation = await validateStartRequest(
+    request.clientId,
+    request.redirectUri,
+  );
 
   if (!validation.ok) {
     throw new Error(validation.error);
@@ -359,7 +411,10 @@ export async function finalizePendingSSORedirect(user: SessionUser) {
     return null;
   }
 
-  const redirectUrl = await createAuthorizationCodeRedirect(pendingRequest, user);
+  const redirectUrl = await createAuthorizationCodeRedirect(
+    pendingRequest,
+    user,
+  );
   await clearPendingSSORequest();
   return redirectUrl;
 }
@@ -408,7 +463,9 @@ export async function exchangeAuthorizationCode(
 
   try {
     const user = await db.runTransaction(async (transaction: any) => {
-      const docRef = db.collection(AUTHORIZATION_CODES_COLLECTION).doc(input.code);
+      const docRef = db
+        .collection(AUTHORIZATION_CODES_COLLECTION)
+        .doc(input.code);
       const snapshot = await transaction.get(docRef);
 
       if (!snapshot.exists) {

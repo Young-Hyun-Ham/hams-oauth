@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { isAcceptIncluded } from "@/lib/auth/accept-include";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   clearEmailVerification,
@@ -17,7 +18,10 @@ import {
   getPendingOAuthSignup,
   getPendingSSORequest,
 } from "@/lib/auth/session";
-import { finalizePendingSSORedirect } from "@/lib/auth/sso";
+import {
+  finalizePendingSSORedirect,
+  getValidatedServiceReturnUrl,
+} from "@/lib/auth/sso";
 import {
   toPublicUser,
   toSessionUser,
@@ -35,6 +39,9 @@ import {
   findPasswordUserByIdentifier,
   findUserByEmail,
   findUserById,
+  purchaseUserServiceMembership,
+  removeUserServiceMembership,
+  requestUserServiceRefund,
   updateUserProfile,
 } from "@/lib/store/user-store";
 
@@ -44,7 +51,31 @@ export type HampoChargeActionState = {
   ok?: boolean;
 };
 
+export type ServiceMembershipPurchaseState = {
+  ok?: boolean;
+  message?: string;
+  code?: "insufficient_hampo";
+  balance?: number;
+  requiredHampo?: number;
+  membership?: ServiceMembership;
+};
+
+export type ServiceMembershipRemovalState = {
+  ok?: boolean;
+  message?: string;
+  memberships?: ServiceMembership[];
+};
+
+export type ServiceRefundRequestState = {
+  ok?: boolean;
+  message?: string;
+  requestedAmount?: number;
+  membership?: ServiceMembership;
+  memberships?: ServiceMembership[];
+};
+
 export type AuthActionState = {
+  ok?: boolean;
   message?: string;
   field?: "email";
 };
@@ -322,6 +353,10 @@ export async function chargeHampo(
     return { message: "로그인이 필요합니다." };
   }
 
+  if (!isAcceptIncluded(session.user.email)) {
+    return { message: "카드 결제 연동 준비 중입니다." };
+  }
+
   const rawAmount = readString(formData, "amount");
   const amount = Number(rawAmount);
 
@@ -360,6 +395,218 @@ export async function chargeHampo(
   }
 }
 
+export async function purchaseServiceMembership(
+  _state: ServiceMembershipPurchaseState | undefined,
+  formData: FormData,
+): Promise<ServiceMembershipPurchaseState> {
+  const session = await getSession();
+
+  if (!session?.userId) {
+    return { message: "로그인이 필요합니다." };
+  }
+
+  const serviceSiteId = readString(formData, "serviceSiteId");
+  const requestedPlan = normalizeServicePlan(readString(formData, "plan"));
+  const site = (await listServiceSites()).find(
+    (candidate) => candidate.id === serviceSiteId,
+  );
+
+  if (!site || (site.isFixedPricing && !requestedPlan)) {
+    return { message: "유효한 서비스와 요금제를 선택해 주세요." };
+  }
+
+  const plan = site.isFixedPricing ? requestedPlan! : "basic";
+  const currentUser = await findUserById(session.userId);
+  if (!currentUser) return { message: "회원정보를 찾을 수 없습니다." };
+  const currentMembership = currentUser.serviceMemberships.find(
+    (membership) =>
+      membership.serviceSiteId === site.id ||
+      membership.clientId === site.clientId,
+  );
+
+  if (currentMembership?.status === "refund_pending") {
+    return { message: "환불 진행 중인 서비스는 변경할 수 없습니다." };
+  }
+
+  const planPrice = site.prices[plan];
+  const currentPlanPrice = currentMembership
+    ? typeof currentMembership.monthlyPrice === "number"
+      ? currentMembership.monthlyPrice
+      : site.prices[currentMembership.plan]
+    : 0;
+  if (currentMembership && currentPlanPrice > 0) {
+    const planOrder: ServicePlan[] = ["basic", "standard", "premium"];
+    if (planOrder.indexOf(plan) <= planOrder.indexOf(currentMembership.plan)) {
+      return {
+        message:
+          "유료 서비스는 현재 플랜보다 높은 단계로만 업그레이드할 수 있습니다.",
+      };
+    }
+  }
+
+  const paymentAmount = Math.max(0, planPrice - currentPlanPrice);
+  if (paymentAmount % 100 !== 0) {
+    return {
+      message: `${site.name}의 요금은 100원 단위로 설정되어야 함포를 사용할 수 있습니다.`,
+    };
+  }
+
+  const requiredHampo = paymentAmount / 100;
+
+  try {
+    const result = await purchaseUserServiceMembership({
+      userId: session.userId,
+      serviceSiteId: site.id,
+      clientId: site.clientId,
+      serviceName: site.name,
+      plan,
+      amount: requiredHampo,
+      planPrice,
+      paymentAmount,
+    });
+    const updatedUser = await findUserById(session.userId);
+
+    if (!updatedUser) {
+      return { message: "회원정보를 찾을 수 없습니다." };
+    }
+
+    await createSession(toSessionUser(updatedUser));
+    revalidatePath("/");
+    revalidatePath("/login");
+    revalidatePath("/profile");
+    revalidatePath("/profile/services");
+
+    return {
+      ok: true,
+      balance: result.balance,
+      membership: result.membership,
+      requiredHampo,
+      message:
+        result.chargedAmount > 0
+          ? `${site.name} 서비스가 추가되고 ${result.chargedAmount.toLocaleString("ko-KR")}함포가 사용되었습니다.`
+          : "이미 선택한 요금제를 이용 중입니다.",
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "서비스 추가 중 오류가 발생했습니다.";
+    const latestUser = await findUserById(session.userId);
+    return {
+      message,
+      code: message.includes("잔액이 부족") ? "insufficient_hampo" : undefined,
+      balance: latestUser?.hampoBalance ?? session.user.hampoBalance,
+      requiredHampo,
+    };
+  }
+}
+
+export async function removeServiceMembership(
+  _state: ServiceMembershipRemovalState | undefined,
+  formData: FormData,
+): Promise<ServiceMembershipRemovalState> {
+  const session = await getSession();
+
+  if (!session?.userId) {
+    return { message: "로그인이 필요합니다." };
+  }
+
+  const serviceSiteId = readString(formData, "serviceSiteId");
+  const serviceSites = await listServiceSites();
+  const site = serviceSites.find((candidate) => candidate.id === serviceSiteId);
+  const user = await findUserById(session.userId);
+  const membership = user?.serviceMemberships.find(
+    (item) =>
+      item.serviceSiteId === serviceSiteId || item.clientId === site?.clientId,
+  );
+
+  if (!user || !membership) {
+    return { message: "삭제할 서비스 가입정보를 찾을 수 없습니다." };
+  }
+
+  const canDelete = site
+    ? !site.isFixedPricing || site.prices[membership.plan] === 0
+    : membership.monthlyPrice === 0;
+  if (!canDelete) {
+    return { message: "유료 정찰제 서비스는 삭제할 수 없습니다." };
+  }
+
+  const memberships = await removeUserServiceMembership(
+    user.id,
+    membership.serviceSiteId,
+    membership.clientId,
+  );
+  const updatedUser = await findUserById(user.id);
+  if (updatedUser) await createSession(toSessionUser(updatedUser));
+  revalidatePath("/login");
+  revalidatePath("/profile/services");
+
+  return { ok: true, message: "서비스를 삭제했습니다.", memberships };
+}
+
+export async function requestServiceRefund(
+  _state: ServiceRefundRequestState | undefined,
+  formData: FormData,
+): Promise<ServiceRefundRequestState> {
+  const session = await getSession();
+
+  if (!session?.userId) return { message: "로그인이 필요합니다." };
+  if (
+    readString(formData, "confirmation") !== "REFUND" ||
+    formData.get("acknowledged") !== "on"
+  ) {
+    return { message: "환불 요청 확인 문구를 정확히 입력해 주세요." };
+  }
+
+  const serviceSiteId = readString(formData, "serviceSiteId");
+  const user = await findUserById(session.userId);
+  const site = (await listServiceSites()).find(
+    (candidate) => candidate.id === serviceSiteId,
+  );
+  const membership = user?.serviceMemberships.find(
+    (item) =>
+      item.serviceSiteId === serviceSiteId || item.clientId === site?.clientId,
+  );
+
+  if (!user || !site || !membership) {
+    return { message: "환불할 서비스 가입정보를 찾을 수 없습니다." };
+  }
+  if (membership.status === "refund_pending") {
+    return { message: "이미 환불 진행 중인 서비스입니다." };
+  }
+  if (!site.isFixedPricing || site.prices[membership.plan] <= 0) {
+    return { message: "유료 정찰제 서비스만 환불을 요청할 수 있습니다." };
+  }
+
+  try {
+    const result = await requestUserServiceRefund(
+      user.id,
+      membership.serviceSiteId,
+      membership.clientId,
+    );
+    const updatedUser = await findUserById(user.id);
+    if (updatedUser) await createSession(toSessionUser(updatedUser));
+    revalidatePath("/login");
+    revalidatePath("/profile/services");
+
+    return {
+      ok: true,
+      message:
+        "환불 요청이 접수되었습니다. 관리자 처리 전까지 서비스를 이용할 수 없습니다.",
+      requestedAmount: result.requestedAmount,
+      membership: result.membership,
+      memberships: result.memberships,
+    };
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error
+          ? error.message
+          : "환불 요청 중 오류가 발생했습니다.",
+    };
+  }
+}
+
 export async function updateProfile(
   _state: AuthActionState | undefined,
   formData: FormData,
@@ -379,6 +626,10 @@ export async function updateProfile(
   const gender = normalizeGender(readString(formData, "gender"));
   const password = readString(formData, "password");
   const passwordConfirm = readString(formData, "passwordConfirm");
+  const serviceReturnTo = await getValidatedServiceReturnUrl(
+    readString(formData, "serviceClientId") || undefined,
+    readString(formData, "serviceReturnTo") || undefined,
+  );
 
   if (nickname.length < 2) {
     return { message: "닉네임은 2자 이상이어야 합니다." };
@@ -432,30 +683,101 @@ export async function updateProfile(
         }>)
       : [];
     const serviceSites = await listServiceSites();
-    const serviceMemberships: ServiceMembership[] = [];
+    const serviceMemberships: ServiceMembership[] = rawMemberships
+      ? []
+      : existingUser.serviceMemberships;
+    const hampoUsages: Array<{
+      serviceSiteId: string;
+      clientId: string;
+      serviceName: string;
+      plan: ServicePlan;
+      amount: number;
+      paymentAmount: number;
+    }> = [];
 
-    for (const requested of requestedMemberships) {
-      const site = serviceSites.find(
-        (item) => item.id === requested.serviceSiteId,
-      );
-      const plan = normalizeServicePlan(requested.plan ?? "");
-      if (!site || !plan) {
-        throw new Error(
-          "유효하지 않은 서비스 또는 요금제가 포함되어 있습니다.",
+    if (rawMemberships) {
+      for (const previous of existingUser.serviceMemberships) {
+        const remainsSelected = requestedMemberships.some(
+          (requested) =>
+            requested.serviceSiteId === previous.serviceSiteId ||
+            serviceSites.some(
+              (site) =>
+                site.id === requested.serviceSiteId &&
+                site.clientId === previous.clientId,
+            ),
         );
+
+        if (remainsSelected) continue;
+
+        const previousSite = serviceSites.find(
+          (site) =>
+            site.id === previous.serviceSiteId ||
+            site.clientId === previous.clientId,
+        );
+        const canDelete = previousSite
+          ? !previousSite.isFixedPricing ||
+            previousSite.prices[previous.plan] === 0
+          : previous.monthlyPrice === 0;
+
+        if (!canDelete) {
+          throw new Error(
+            `${previous.serviceName}은(는) 유료 정찰제 서비스라 삭제할 수 없습니다.`,
+          );
+        }
       }
-      const previous = existingUser.serviceMemberships.find(
-        (item) =>
-          item.serviceSiteId === site.id || item.clientId === site.clientId,
-      );
-      serviceMemberships.push({
-        serviceSiteId: site.id,
-        clientId: site.clientId,
-        serviceName: site.name,
-        plan: site.isFixedPricing ? plan : "basic",
-        monthlyPrice: site.isFixedPricing ? site.prices[plan] : 0,
-        joinedAt: previous?.joinedAt ?? new Date().toISOString(),
-      });
+
+      for (const requested of requestedMemberships) {
+        const site = serviceSites.find(
+          (item) => item.id === requested.serviceSiteId,
+        );
+        const plan = normalizeServicePlan(requested.plan ?? "");
+        if (!site || !plan) {
+          throw new Error(
+            "유효하지 않은 서비스 또는 요금제가 포함되어 있습니다.",
+          );
+        }
+        const previous = existingUser.serviceMemberships.find(
+          (item) =>
+            item.serviceSiteId === site.id || item.clientId === site.clientId,
+        );
+        if (previous?.status === "refund_pending") {
+          throw new Error(
+            "환불 진행 중인 서비스는 회원정보 수정에서 변경할 수 없습니다.",
+          );
+        }
+        if (site.isFixedPricing && (!previous || previous.plan !== plan)) {
+          const paymentAmount = site.prices[plan];
+
+          if (paymentAmount % 100 !== 0) {
+            throw new Error(
+              `${site.name}의 요금은 100원 단위로 설정되어야 함포를 사용할 수 있습니다.`,
+            );
+          }
+
+          const amount = paymentAmount / 100;
+          if (amount > 0) {
+            hampoUsages.push({
+              serviceSiteId: site.id,
+              clientId: site.clientId,
+              serviceName: site.name,
+              plan,
+              amount,
+              paymentAmount,
+            });
+          }
+        }
+        serviceMemberships.push({
+          serviceSiteId: site.id,
+          clientId: site.clientId,
+          serviceName: site.name,
+          plan: site.isFixedPricing ? plan : "basic",
+          monthlyPrice: site.isFixedPricing ? site.prices[plan] : 0,
+          joinedAt: previous?.joinedAt ?? new Date().toISOString(),
+          status: previous?.status ?? "active",
+          refundRequestedAt: previous?.refundRequestedAt ?? null,
+          refundRequestId: previous?.refundRequestId ?? null,
+        });
+      }
     }
 
     const user = await updateUserProfile({
@@ -470,14 +792,13 @@ export async function updateProfile(
       aiChatType,
       apiKey: apiKey || null,
       chatModel: chatModel || null,
+      hampoUsages,
     });
 
     await createSession(toSessionUser(user));
     revalidatePath("/");
     revalidatePath("/login");
     revalidatePath("/profile");
-
-    return { message: "회원정보가 수정되었습니다." };
   } catch (error) {
     return {
       message:
@@ -486,6 +807,12 @@ export async function updateProfile(
           : "회원정보 수정 중 오류가 발생했습니다.",
     };
   }
+
+  if (serviceReturnTo) {
+    redirect(serviceReturnTo);
+  }
+
+  return { ok: true, message: "회원정보가 수정되었습니다." };
 }
 
 export async function deleteAccount(

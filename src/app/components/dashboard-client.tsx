@@ -6,6 +6,7 @@ import { useState } from "react";
 import { logout } from "@/app/actions/auth";
 import { AdminUnlockModal } from "@/app/components/admin-unlock-modal";
 import { HampoChargeModal } from "@/app/components/hampo-charge-modal";
+import { isAcceptIncluded } from "@/lib/auth/accept-include";
 import { useAuthStore } from "@/lib/store/auth-store";
 
 /*
@@ -110,14 +111,29 @@ export function DashboardClient() {
             회원정보 수정
           </Link>
 
-          {process.env.NEXT_PUBLIC_ACCEPT_INCLUDE?.includes(viewer.email) && (
-            <button
-              type="button"
-              onClick={() => setIsAdminModalOpen(true)}
-              className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/50"
-            >
-              관리
-            </button>
+          <Link
+            href="/profile/services"
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/50"
+          >
+            서비스 변경
+          </Link>
+
+          {isAcceptIncluded(viewer.email) && (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsAdminModalOpen(true)}
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/50"
+              >
+                관리
+              </button>
+              <Link
+                href="/"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/50"
+              >
+                홈으로 이동
+              </Link>
+            </>
           )}
 
           <form action={logout}>

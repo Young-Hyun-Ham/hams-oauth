@@ -7,11 +7,15 @@ import { createPortal } from "react-dom";
 export function ServiceAccessLink({
   href,
   blockBeforeLogin,
+  blockedTitle = "로그인이 필요합니다",
+  blockedMessage = "이 서비스는 로그인 후 이동할 수 있습니다.",
   children,
   className,
 }: {
   href: string;
   blockBeforeLogin: boolean;
+  blockedTitle?: string;
+  blockedMessage?: string;
   children: ReactNode;
   className: string;
 }) {
@@ -28,7 +32,7 @@ export function ServiceAccessLink({
         href={href || "#"}
         target="_blank"
         rel="noreferrer"
-        aria-disabled={!href}
+        aria-disabled={blockBeforeLogin || !href}
         onClick={(event) => {
           if (blockBeforeLogin) {
             event.preventDefault();
@@ -56,10 +60,10 @@ export function ServiceAccessLink({
                   id="service-login-modal-title"
                   className="mt-4 text-2xl font-semibold text-foreground"
                 >
-                  로그인이 필요합니다
+                  {blockedTitle}
                 </h3>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                  이 서비스는 로그인 후 이동할 수 있습니다.
+                  {blockedMessage}
                 </p>
                 <button
                   type="button"

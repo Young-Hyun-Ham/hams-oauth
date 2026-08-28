@@ -1,14 +1,35 @@
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "@/app/components/profile-form";
-import { getSession } from "@/lib/auth/session";
+import { createPostLoginRedirect, getSession } from "@/lib/auth/session";
+import { getValidatedServiceReturnUrl } from "@/lib/auth/sso";
 import { findUserById } from "@/lib/store/user-store";
 import { listServiceSites } from "@/lib/store/service-site-store";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const clientId =
+    typeof params.client_id === "string" ? params.client_id : undefined;
+  const requestedReturnTo =
+    typeof params.return_to === "string" ? params.return_to : undefined;
+  const returnTo = await getValidatedServiceReturnUrl(
+    clientId,
+    requestedReturnTo,
+  );
   const session = await getSession();
 
   if (!session?.userId) {
+    if (returnTo && clientId) {
+      const query = new URLSearchParams({
+        client_id: clientId,
+        return_to: returnTo,
+      });
+      await createPostLoginRedirect(`/profile?${query.toString()}`);
+    }
     redirect("/login");
   }
 
@@ -89,7 +110,12 @@ export default async function ProfilePage() {
           </div>
         </div>
 
-        <ProfileForm user={user} serviceSites={serviceSites} />
+        <ProfileForm
+          user={user}
+          serviceReturn={
+            returnTo && clientId ? { clientId, returnTo } : undefined
+          }
+        />
       </section>
     </main>
   );

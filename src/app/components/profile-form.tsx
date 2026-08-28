@@ -9,16 +9,7 @@ import {
   updateProfile,
   type AuthActionState,
 } from "@/app/actions/auth";
-import type { AIChatType, AuthUser, ServicePlan } from "@/lib/auth/types";
-
-type ProfileService = {
-  id: string;
-  clientId: string;
-  name: string;
-  description: string;
-  isFixedPricing: boolean;
-  prices: Record<ServicePlan, number>;
-};
+import type { AIChatType, AuthUser } from "@/lib/auth/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const BIRTH_YEARS = Array.from(
@@ -102,12 +93,11 @@ function Message({
 
 export function ProfileForm({
   user,
-  serviceSites,
+  serviceReturn,
 }: {
   user: AuthUser;
-  serviceSites: ProfileService[];
+  serviceReturn?: { clientId: string; returnTo: string };
 }) {
-  const fixedPricingSites = serviceSites.filter((site) => site.isFixedPricing);
   const [state, action] = useActionState(updateProfile, undefined);
   const [deleteState, deleteAction] = useActionState(deleteAccount, undefined);
   const [phoneNumber, setPhoneNumber] = useState(user.phoneNumber);
@@ -122,11 +112,6 @@ export function ProfileForm({
   const [birthDay, setBirthDay] = useState(
     initialBirthDay ? String(Number(initialBirthDay)) : "",
   );
-  const [memberships, setMemberships] = useState(user.serviceMemberships);
-  const [selectedServiceId, setSelectedServiceId] = useState(
-    fixedPricingSites[0]?.id ?? "",
-  );
-  const [selectedPlan, setSelectedPlan] = useState<ServicePlan>("basic");
   const [aiEnabled, setAIEnabled] = useState(user.aiEnabled);
   const [aiChatType, setAIChatType] = useState<AIChatType | "">(
     user.aiChatType ?? "",
@@ -162,40 +147,15 @@ export function ProfileForm({
     setBirthYear(year);
     setBirthMonth(month ? String(Number(month)) : "");
     setBirthDay(day ? String(Number(day)) : "");
-    setMemberships(user.serviceMemberships);
     setAIEnabled(user.aiEnabled);
     setAIChatType(user.aiChatType ?? "");
     setApiKey(user.apiKey ?? "");
     setChatModel(user.chatModel ?? "");
-  }, [user]);
+  }, [user.id]);
 
   useEffect(() => {
     if (birthDay && !birthDays.includes(Number(birthDay))) setBirthDay("");
   }, [birthDay, birthDays]);
-
-  function addServiceMembership() {
-    const site = fixedPricingSites.find(
-      (item) => item.id === selectedServiceId,
-    );
-    if (!site) return;
-    const plan = site.isFixedPricing ? selectedPlan : "basic";
-    setMemberships((current) => [
-      ...current.filter(
-        (item) =>
-          item.serviceSiteId !== site.id && item.clientId !== site.clientId,
-      ),
-      {
-        serviceSiteId: site.id,
-        clientId: site.clientId,
-        serviceName: site.name,
-        plan,
-        monthlyPrice: site.isFixedPricing ? site.prices[plan] : 0,
-        joinedAt:
-          current.find((item) => item.serviceSiteId === site.id)?.joinedAt ??
-          new Date().toISOString(),
-      },
-    ]);
-  }
 
   useEffect(() => {
     if (!aiEnabled) {
@@ -298,13 +258,26 @@ export function ProfileForm({
   }
 
   const isDeleteConfirmed = deleteLoginIdInput.trim() === user.loginId;
-
   return (
     <>
       <form
         action={action}
         className="space-y-5 rounded-4xl border border-border/70 bg-card p-6 shadow-lg shadow-black/5 md:p-7"
       >
+        {serviceReturn ? (
+          <>
+            <input
+              type="hidden"
+              name="serviceClientId"
+              value={serviceReturn.clientId}
+            />
+            <input
+              type="hidden"
+              name="serviceReturnTo"
+              value={serviceReturn.returnTo}
+            />
+          </>
+        ) : null}
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold text-foreground">
             회원정보 수정
@@ -472,90 +445,6 @@ export function ProfileForm({
           </select>
         </label>
 
-        <div className="space-y-4 rounded-3xl border border-primary/20 bg-primary/5 p-4">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">
-              서비스사이트 추가
-            </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              서비스와 이용 타입을 선택한 후 추가해 주세요.
-            </p>
-          </div>
-          <input
-            type="hidden"
-            name="serviceMemberships"
-            value={JSON.stringify(
-              memberships.map((item) => ({
-                serviceSiteId: item.serviceSiteId,
-                plan: item.plan,
-              })),
-            )}
-          />
-          <select
-            value={selectedServiceId}
-            onChange={(event) => {
-              setSelectedServiceId(event.target.value);
-              setSelectedPlan("basic");
-            }}
-            className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-foreground"
-          >
-            {fixedPricingSites.length === 0 ? (
-              <option value="">
-                추가 가능한 가격정찰제 서비스가 없습니다.
-              </option>
-            ) : null}
-            {fixedPricingSites.map((site) => (
-              <option key={site.id} value={site.id}>
-                {site.name}
-              </option>
-            ))}
-          </select>
-          {fixedPricingSites.find((site) => site.id === selectedServiceId) ? (
-            <select
-              value={selectedPlan}
-              onChange={(event) =>
-                setSelectedPlan(event.target.value as ServicePlan)
-              }
-              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-foreground"
-            >
-              {(["basic", "standard", "premium"] as const).map((plan) => {
-                const site = fixedPricingSites.find(
-                  (item) => item.id === selectedServiceId,
-                )!;
-                return (
-                  <option key={plan} value={plan}>
-                    {plan.toUpperCase()} ·{" "}
-                    {site.prices[plan].toLocaleString("ko-KR")}원
-                  </option>
-                );
-              })}
-            </select>
-          ) : null}
-          <button
-            type="button"
-            onClick={addServiceMembership}
-            disabled={!selectedServiceId}
-            className="w-full rounded-2xl border border-primary bg-background px-4 py-3 text-sm font-semibold text-primary disabled:opacity-50"
-          >
-            서비스 추가
-          </button>
-          <div className="space-y-2">
-            {memberships.map((item) => (
-              <div
-                key={item.serviceSiteId}
-                className="flex items-center justify-between rounded-2xl bg-background px-4 py-3 text-sm"
-              >
-                <span className="font-medium text-foreground">
-                  {item.serviceName}
-                </span>
-                <span className="font-semibold uppercase text-primary">
-                  {item.plan}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
         <div className="space-y-4 rounded-2xl border border-border/60 bg-muted/20 p-4">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -690,10 +579,10 @@ export function ProfileForm({
             <DeleteButton onClick={openDeleteModal} />
           </div>
           <Link
-            href="/login"
+            href={serviceReturn?.returnTo ?? "/login"}
             className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-background px-5 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/50"
           >
-            돌아가기
+            {serviceReturn ? "서비스로 이동" : "돌아가기"}
           </Link>
         </div>
       </form>

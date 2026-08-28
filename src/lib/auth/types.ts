@@ -11,6 +11,9 @@ export type ServiceMembership = {
   plan: ServicePlan;
   monthlyPrice: number;
   joinedAt: string;
+  status?: "active" | "refund_pending";
+  refundRequestedAt?: string | null;
+  refundRequestId?: string | null;
 };
 
 export type AuthUser = {

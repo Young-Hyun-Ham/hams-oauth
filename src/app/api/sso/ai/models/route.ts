@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 
 import {
   readBearerToken,
-  verifyServiceAccessToken,
+  verifyActiveServiceAccessToken,
 } from "@/lib/auth/service-access-token";
 import { AiServiceError, listUserAiModels } from "@/lib/ai/service-ai";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const access = verifyServiceAccessToken(
+  const access = await verifyActiveServiceAccessToken(
     readBearerToken(request),
     "ai:models",
   );

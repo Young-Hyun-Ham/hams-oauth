@@ -23,7 +23,7 @@ export function ServicePricingFields({
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-slate-900">
-            가격 정찰제 사용
+            부분 유료 서비스
           </p>
           <p className="mt-1 text-xs text-slate-500">
             활성화하면 Basic, Standard, Premium 월 요금을 설정합니다.

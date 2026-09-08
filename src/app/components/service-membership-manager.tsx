@@ -267,7 +267,7 @@ export function ServiceMembershipManager({
               서비스 변경
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              무료 서비스는 바로 반영되고 유료 서비스는 함포 결제 후 즉시
+              무료 서비스는 바로 반영되고 부분 유료 서비스는 함포 결제 후 즉시
               추가됩니다.
             </p>
           </div>

@@ -439,7 +439,7 @@ export async function purchaseServiceMembership(
     if (planOrder.indexOf(plan) <= planOrder.indexOf(currentMembership.plan)) {
       return {
         message:
-          "유료 서비스는 현재 플랜보다 높은 단계로만 업그레이드할 수 있습니다.",
+          "부분 유료 서비스는 현재 플랜보다 높은 단계로만 업그레이드할 수 있습니다.",
       };
     }
   }
@@ -528,7 +528,7 @@ export async function removeServiceMembership(
     ? !site.isFixedPricing || site.prices[membership.plan] === 0
     : membership.monthlyPrice === 0;
   if (!canDelete) {
-    return { message: "유료 정찰제 서비스는 삭제할 수 없습니다." };
+    return { message: "부분 유료 서비스는 삭제할 수 없습니다." };
   }
 
   const memberships = await removeUserServiceMembership(
@@ -575,7 +575,7 @@ export async function requestServiceRefund(
     return { message: "이미 환불 진행 중인 서비스입니다." };
   }
   if (!site.isFixedPricing || site.prices[membership.plan] <= 0) {
-    return { message: "유료 정찰제 서비스만 환불을 요청할 수 있습니다." };
+    return { message: "부분 유료 서비스만 환불을 요청할 수 있습니다." };
   }
 
   try {
@@ -721,7 +721,7 @@ export async function updateProfile(
 
         if (!canDelete) {
           throw new Error(
-            `${previous.serviceName}은(는) 유료 정찰제 서비스라 삭제할 수 없습니다.`,
+            `${previous.serviceName}은(는) 유료 서비스라 삭제할 수 없습니다.`,
           );
         }
       }

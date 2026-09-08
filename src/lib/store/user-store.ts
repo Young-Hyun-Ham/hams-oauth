@@ -532,7 +532,7 @@ export async function purchaseUserServiceMembership(input: {
       previous.monthlyPrice > 0 &&
       input.planPrice <= previous.monthlyPrice
     ) {
-      throw new Error("유료 서비스는 상위 플랜으로만 업그레이드할 수 있습니다.");
+      throw new Error("부분 유료 서비스는 상위 플랜으로만 업그레이드할 수 있습니다.");
     }
 
     if (previous?.plan === input.plan) {

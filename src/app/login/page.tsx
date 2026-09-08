@@ -301,11 +301,11 @@ export default async function LoginPage({
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 [&::-webkit-details-marker]:hidden">
                     <div>
                       <h2 className="font-semibold text-foreground">
-                        정찰제 미사용 서비스
+                        무료 서비스
                       </h2>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {user
-                          ? "이용 가능한 정찰제 미사용 서비스입니다."
+                          ? "이용 가능한 무료 서비스입니다."
                           : "가입 전에 바로 살펴볼 수 있는 서비스입니다."}
                       </p>
                     </div>
@@ -324,7 +324,7 @@ export default async function LoginPage({
                   <div className="space-y-2 border-t border-emerald-200/70 p-3">
                     {nonFixedPricingSites.length === 0 ? (
                       <p className="rounded-2xl bg-white p-4 text-sm text-muted-foreground">
-                        등록된 정찰제 미사용 서비스가 없습니다.
+                        등록된 무료 서비스가 없습니다.
                       </p>
                     ) : (
                       renderServiceCards(
@@ -336,7 +336,7 @@ export default async function LoginPage({
                       nonFixedTotalPages,
                       nonFixedPage,
                       "nonFixedPage",
-                      "정찰제 미사용 서비스 페이지",
+                      "무료 서비스 페이지",
                     )}
                   </div>
                 </details>
@@ -348,11 +348,11 @@ export default async function LoginPage({
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 [&::-webkit-details-marker]:hidden">
                     <div>
                       <h2 className="font-semibold text-foreground">
-                        정찰제 사용 서비스
+                        부분 유료 서비스
                       </h2>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {user
-                          ? "가입한 정찰제 서비스와 요금제를 확인하세요."
+                          ? "가입한 부분 유료 서비스와 요금제를 확인하세요."
                           : "필요할 때 펼쳐 요금제와 서비스를 확인하세요."}
                       </p>
                     </div>
@@ -371,7 +371,7 @@ export default async function LoginPage({
                   <div className="space-y-2 border-t border-border/70 p-3">
                     {fixedPricingSites.length === 0 ? (
                       <p className="rounded-2xl bg-white p-4 text-sm text-muted-foreground">
-                        등록된 정찰제 사용 서비스가 없습니다.
+                        등록된 부분 유료 서비스가 없습니다.
                       </p>
                     ) : (
                       renderServiceCards(
@@ -383,7 +383,7 @@ export default async function LoginPage({
                       fixedTotalPages,
                       fixedPage,
                       "fixedPage",
-                      "정찰제 사용 서비스 페이지",
+                      "부분 유료 서비스 페이지",
                     )}
                   </div>
                 </details>

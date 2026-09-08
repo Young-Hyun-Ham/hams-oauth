@@ -66,7 +66,7 @@ export function HampoChargeModal({
           </p>
           <h3 className="text-2xl font-semibold text-foreground">함포 충전</h3>
           <p className="text-sm leading-6 text-muted-foreground">
-            함포는 서비스사이트의 정찰제 요금을 결제할 때 사용합니다.
+            함포는 유료 서비스 사이트 사용 요금을 결제할 때 사용합니다.
             <br />
             <strong className="ml-1 text-foreground">1함포는 100원</strong>
             입니다.

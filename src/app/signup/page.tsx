@@ -113,7 +113,7 @@ export default async function SignupPage() {
                       </div>
                     ) : (
                       <p className="mt-3 text-xs font-medium text-muted-foreground">
-                        정찰제 요금을 사용하지 않는 서비스입니다.
+                        무료 서비스입니다.
                       </p>
                     )}
                   </div>

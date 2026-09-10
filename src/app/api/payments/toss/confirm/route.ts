@@ -48,6 +48,10 @@ export async function POST(request: NextRequest) {
       orderId,
       paymentKey,
       method: payment.method || "카드",
+      cardIssuerCode: payment.card?.issuerCode,
+      cardAcquirerCode: payment.card?.acquirerCode || undefined,
+      cardNumber: payment.card?.number,
+      cardApproveNo: payment.card?.approveNo,
     });
     const updatedUser = await findUserById(session.userId);
     if (updatedUser) await createSession(toSessionUser(updatedUser));

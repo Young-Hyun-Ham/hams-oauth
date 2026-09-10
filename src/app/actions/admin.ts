@@ -9,6 +9,8 @@ import {
   requireAdminAccess,
 } from "@/lib/admin/access";
 import { updateAdminPassword } from "@/lib/store/admin-settings-store";
+import { refundTossHampoCharge } from "@/lib/toss-payments/server";
+import { reclaimManualHampoCharge } from "@/lib/store/hampo-history-store";
 import {
   deleteTermsDocument,
   upsertTermsDocument,
@@ -374,11 +376,132 @@ export async function chargeAdminUserHampo(formData: FormData) {
   );
 }
 
+export type AdminHampoChargeModalState = {
+  ok?: boolean;
+  message?: string;
+  balance?: number;
+};
+
+export async function chargeAdminUserHampoFromModal(
+  _state: AdminHampoChargeModalState | undefined,
+  formData: FormData,
+): Promise<AdminHampoChargeModalState> {
+  await requireAdminAccess();
+
+  const id = readString(formData, "id");
+  const rawAmount = readString(formData, "amount");
+  const amount = Number(rawAmount);
+  if (!id) return { message: "충전할 회원 정보가 없습니다." };
+  if (!/^\d+$/.test(rawAmount) || !Number.isSafeInteger(amount) || amount < 1) {
+    return { message: "충전할 함포를 1 이상의 정수로 입력해 주세요." };
+  }
+  if (amount > 1_000_000) {
+    return { message: "한 번에 최대 1,000,000함포까지 충전할 수 있습니다." };
+  }
+
+  try {
+    const balance = await chargeUserHampo(id, amount, "admin_manual_charge");
+    revalidatePath("/admin");
+    revalidatePath("/login");
+    return {
+      ok: true,
+      balance,
+      message: `${amount.toLocaleString("ko-KR")}함포를 충전했습니다.`,
+    };
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error
+          ? error.message
+          : "함포 충전 중 오류가 발생했습니다.",
+    };
+  }
+}
+
 export type CompleteAdminHampoRefundState = {
   ok?: boolean;
   message?: string;
   refundedAmount?: number;
 };
+
+export type RefundHampoChargeState = {
+  ok?: boolean;
+  message?: string;
+};
+
+export async function refundHampoCharge(
+  _state: RefundHampoChargeState | undefined,
+  formData: FormData,
+): Promise<RefundHampoChargeState> {
+  await requireAdminAccess();
+
+  try {
+    const historyId = readString(formData, "historyId");
+    if (!historyId)
+      return { ok: false, message: "환불할 충전 이력을 선택해 주세요." };
+    if (formData.get("refundConfirmed") !== "on") {
+      return {
+        ok: false,
+        message: "카드 결제 취소와 함포 회수를 확인해 주세요.",
+      };
+    }
+
+    const result = await refundTossHampoCharge({
+      historyId,
+      cancelReason:
+        readString(formData, "cancelReason") || "함포 충전 결제 환불",
+    });
+    revalidatePath("/admin");
+    revalidatePath("/login");
+    return {
+      ok: true,
+      message: `${result.refundedAmount.toLocaleString("ko-KR")}함포, ${result.refundedPaymentAmount.toLocaleString("ko-KR")}원 환불이 완료되었습니다.`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "함포 충전 환불 중 오류가 발생했습니다.",
+    };
+  }
+}
+
+export async function reclaimManualCharge(
+  _state: RefundHampoChargeState | undefined,
+  formData: FormData,
+): Promise<RefundHampoChargeState> {
+  await requireAdminAccess();
+
+  try {
+    const historyId = readString(formData, "historyId");
+    if (!historyId)
+      return { ok: false, message: "회수할 충전 이력을 선택해 주세요." };
+    if (formData.get("reclaimConfirmed") !== "on") {
+      return { ok: false, message: "수동 충전 함포 회수를 확인해 주세요." };
+    }
+
+    const result = await reclaimManualHampoCharge(
+      historyId,
+      readString(formData, "reclaimReason") || "수동 충전 함포 회수",
+    );
+    revalidatePath("/admin");
+    revalidatePath("/login");
+    return {
+      ok: true,
+      message: `${result.reclaimedAmount.toLocaleString("ko-KR")}함포를 회수했습니다.`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "수동 충전 함포 회수 중 오류가 발생했습니다.",
+    };
+  }
+}
 
 export async function completeAdminHampoRefund(
   _state: CompleteAdminHampoRefundState | undefined,

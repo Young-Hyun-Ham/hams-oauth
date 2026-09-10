@@ -1,14 +1,15 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { createPortal, useFormStatus } from "react-dom";
 
 import { chargeHampo } from "@/app/actions/auth";
+import { chargeAdminUserHampoFromModal } from "@/app/actions/admin";
 import { CardPaymentModal } from "@/app/components/toss-payments";
 import { isAcceptIncluded } from "@/lib/auth/accept-include";
 import { useAuthStore } from "@/lib/store/auth-store";
 
-function SubmitButton() {
+function SubmitButton({ isAdminCharge }: { isAdminCharge: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
@@ -16,7 +17,11 @@ function SubmitButton() {
       disabled={pending}
       className="w-full rounded-2xl border border-primary px-5 py-3 text-sm font-semibold text-primary transition hover:bg-primary/5 disabled:opacity-60"
     >
-      {pending ? "임시 충전 중..." : "결제 없이 임시 충전"}
+      {pending
+        ? "충전 중..."
+        : isAdminCharge
+          ? "선택 회원에게 함포 충전"
+          : "결제 없이 임시 충전"}
     </button>
   );
 }
@@ -25,17 +30,39 @@ export function HampoChargeModal({
   onClose,
   onCharged,
   initialAmount = 100,
+  targetUser,
 }: {
   onClose: () => void;
   onCharged?: (balance: number) => void;
   initialAmount?: number;
+  targetUser?: {
+    id: string;
+    nickname: string;
+    email: string;
+    hampoBalance: number;
+  };
 }) {
   const viewer = useAuthStore((store) => store.viewer);
   const setHampoBalance = useAuthStore((store) => store.setHampoBalance);
   const [amount, setAmount] = useState(String(initialAmount));
-  const [state, action] = useActionState(chargeHampo, undefined);
+  const [selfState, selfAction] = useActionState(chargeHampo, undefined);
+  const [adminState, adminAction] = useActionState(
+    chargeAdminUserHampoFromModal,
+    undefined,
+  );
+  const isAdminCharge = Boolean(targetUser);
+  const state = isAdminCharge ? adminState : selfState;
+  const action = isAdminCharge ? adminAction : selfAction;
+  const [targetBalance, setTargetBalance] = useState(
+    targetUser?.hampoBalance ?? 0,
+  );
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const canChargeWithoutPayment = isAcceptIncluded(viewer?.email);
+  const [isMounted, setIsMounted] = useState(false);
+  const canChargeWithoutPayment =
+    isAdminCharge || isAcceptIncluded(viewer?.email);
+  const displayedBalance = isAdminCharge
+    ? targetBalance
+    : (viewer?.hampoBalance ?? 0);
   const hampoAmount = Number(amount);
   const isValidAmount =
     Number.isSafeInteger(hampoAmount) &&
@@ -45,12 +72,27 @@ export function HampoChargeModal({
 
   useEffect(() => {
     if (state?.ok && typeof state.balance === "number") {
-      setHampoBalance(state.balance);
+      if (isAdminCharge) {
+        setTargetBalance(state.balance);
+      } else {
+        setHampoBalance(state.balance);
+      }
       onCharged?.(state.balance);
     }
-  }, [onCharged, state, setHampoBalance]);
+  }, [isAdminCharge, onCharged, state, setHampoBalance]);
 
-  return (
+  useEffect(() => {
+    setIsMounted(true);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  if (!isMounted) return null;
+
+  return createPortal(
     <>
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6"
@@ -72,12 +114,18 @@ export function HampoChargeModal({
             함포는 유료 서비스 이용 요금 결제에 사용합니다.{" "}
             <strong className="text-foreground">1함포는 100원</strong>입니다.
           </p>
+          {targetUser ? (
+            <p className="mt-3 rounded-xl bg-primary/5 px-3 py-2 text-sm text-foreground">
+              충전 대상: <strong>{targetUser.nickname}</strong> ·{" "}
+              {targetUser.email}
+            </p>
+          ) : null}
 
           <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-muted/40 p-4 text-sm">
             <div>
               <p className="text-muted-foreground">현재 보유</p>
               <p className="mt-1 font-semibold text-foreground">
-                {(viewer?.hampoBalance ?? 0).toLocaleString("ko-KR")} 함포
+                {displayedBalance.toLocaleString("ko-KR")} 함포
               </p>
             </div>
             <div>
@@ -89,6 +137,9 @@ export function HampoChargeModal({
           </div>
 
           <form action={action} className="mt-5 space-y-4">
+            {targetUser ? (
+              <input type="hidden" name="id" value={targetUser.id} />
+            ) : null}
             <label className="block space-y-2">
               <span className="text-sm font-medium text-foreground">
                 충전할 함포
@@ -137,7 +188,9 @@ export function HampoChargeModal({
               </button>
             </div>
 
-            {canChargeWithoutPayment ? <SubmitButton /> : null}
+            {canChargeWithoutPayment ? (
+              <SubmitButton isAdminCharge={isAdminCharge} />
+            ) : null}
             {state?.message ? (
               <p
                 className={`text-sm font-medium ${state.ok ? "text-primary" : "text-destructive"}`}
@@ -146,14 +199,16 @@ export function HampoChargeModal({
               </p>
             ) : null}
 
-            <button
-              type="button"
-              disabled={!isValidAmount}
-              onClick={() => setIsPaymentModalOpen(true)}
-              className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              카드결제 테스트
-            </button>
+            {!isAdminCharge ? (
+              <button
+                type="button"
+                disabled={!isValidAmount}
+                onClick={() => setIsPaymentModalOpen(true)}
+                className="w-full rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                카드결제 테스트
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onClose}
@@ -165,7 +220,7 @@ export function HampoChargeModal({
         </div>
       </div>
 
-      {isPaymentModalOpen ? (
+      {isPaymentModalOpen && !isAdminCharge ? (
         <CardPaymentModal
           amount={paymentAmount}
           orderName={`함포 ${hampoAmount.toLocaleString("ko-KR")}개 충전`}
@@ -176,6 +231,7 @@ export function HampoChargeModal({
           onClose={() => setIsPaymentModalOpen(false)}
         />
       ) : null}
-    </>
+    </>,
+    document.body,
   );
 }

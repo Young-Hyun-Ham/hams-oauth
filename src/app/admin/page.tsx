@@ -10,12 +10,13 @@ import {
 
 import { AdminPasswordForm } from "@/app/components/admin-password-form";
 import { AdminHampoUsageTable } from "@/app/components/admin-hampo-usage-table";
+import { AdminHampoChargeTable } from "@/app/components/admin-hampo-charge-table";
+import { AdminUserHampoChargeModal } from "@/app/components/admin-user-hampo-charge-modal";
 import { VisibilityToggle } from "@/app/components/visibility-toggle";
 import { ServiceSiteDeleteButton } from "@/app/components/service-site-delete-button";
 import { ServiceSiteSaveForm } from "@/app/components/service-site-save-form";
 import { ServicePricingFields } from "@/app/components/service-pricing-fields";
 import {
-  chargeAdminUserHampo,
   removeAdminUser,
   removeTermsDocument,
   saveAdminUser,
@@ -151,10 +152,7 @@ export default async function AdminPage({
       }
     >
   >((previews, history) => {
-    if (
-      history.refundRequestStatus !== "pending" ||
-      !history.refundRequestId
-    ) {
+    if (history.refundRequestStatus !== "pending" || !history.refundRequestId) {
       return previews;
     }
 
@@ -183,10 +181,7 @@ export default async function AdminPage({
     return previews;
   }, {});
   const requestedUsagePage = getRequestedPage(params.usagePage);
-  const usageTotalPages = Math.max(
-    1,
-    Math.ceil(usageHistories.length / 10),
-  );
+  const usageTotalPages = Math.max(1, Math.ceil(usageHistories.length / 10));
   const currentUsagePage = Math.min(requestedUsagePage, usageTotalPages);
   const pagedUsageHistories = usageHistories.slice(
     (currentUsagePage - 1) * 10,
@@ -200,8 +195,7 @@ export default async function AdminPage({
     (currentUserPage - 1) * 10,
     currentUserPage * 10,
   );
-  const selectedUserId =
-    typeof params.userId === "string" ? params.userId : "";
+  const selectedUserId = typeof params.userId === "string" ? params.userId : "";
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
   const userMode =
     params.userMode === "charge" ||
@@ -916,7 +910,10 @@ export default async function AdminPage({
                           ["가입일", formatDate(selectedUser.createdAt)],
                           ["수정일", formatDate(selectedUser.updatedAt)],
                         ].map(([label, value]) => (
-                          <div key={label} className="rounded-2xl bg-slate-50 p-4">
+                          <div
+                            key={label}
+                            className="rounded-2xl bg-slate-50 p-4"
+                          >
                             <dt className="text-xs font-medium text-slate-500">
                               {label}
                             </dt>
@@ -928,43 +925,15 @@ export default async function AdminPage({
                       </dl>
 
                       {userMode === "charge" ? (
-                        <form
-                          action={chargeAdminUserHampo}
-                          className="space-y-4 rounded-3xl border border-primary/20 bg-primary/5 p-5"
-                        >
-                          <input type="hidden" name="id" value={selectedUser.id} />
-                          <input
-                            type="hidden"
-                            name="userPage"
-                            value={currentUserPage}
-                          />
-                          <div>
-                            <h4 className="font-semibold text-slate-950">
-                              함포 충전
-                            </h4>
-                            <p className="mt-1 text-sm text-slate-600">
-                              결제 없이 관리자가 회원 잔액에 함포를 추가합니다.
-                            </p>
-                          </div>
-                          <label className="block space-y-2">
-                            <span className="text-sm font-medium text-slate-900">
-                              충전할 함포
-                            </span>
-                            <input
-                              name="amount"
-                              type="number"
-                              min={1}
-                              max={1000000}
-                              step={1}
-                              required
-                              autoFocus
-                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                            />
-                          </label>
-                          <button className="rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground">
-                            함포 충전하기
-                          </button>
-                        </form>
+                        <AdminUserHampoChargeModal
+                          user={{
+                            id: selectedUser.id,
+                            nickname: selectedUser.nickname,
+                            email: selectedUser.email,
+                            hampoBalance: selectedUser.hampoBalance,
+                          }}
+                          closeHref={getUserHref(selectedUser.id)}
+                        />
                       ) : null}
 
                       {userMode === "edit" ? (
@@ -972,14 +941,20 @@ export default async function AdminPage({
                           action={saveAdminUser}
                           className="grid gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-5 sm:grid-cols-2"
                         >
-                          <input type="hidden" name="id" value={selectedUser.id} />
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={selectedUser.id}
+                          />
                           <input
                             type="hidden"
                             name="userPage"
                             value={currentUserPage}
                           />
                           <label className="space-y-2">
-                            <span className="text-sm font-medium">로그인 ID</span>
+                            <span className="text-sm font-medium">
+                              로그인 ID
+                            </span>
                             <input
                               name="loginId"
                               required
@@ -1007,7 +982,9 @@ export default async function AdminPage({
                             />
                           </label>
                           <label className="space-y-2">
-                            <span className="text-sm font-medium">전화번호</span>
+                            <span className="text-sm font-medium">
+                              전화번호
+                            </span>
                             <input
                               name="phoneNumber"
                               defaultValue={selectedUser.phoneNumber}
@@ -1015,7 +992,9 @@ export default async function AdminPage({
                             />
                           </label>
                           <label className="space-y-2">
-                            <span className="text-sm font-medium">생년월일</span>
+                            <span className="text-sm font-medium">
+                              생년월일
+                            </span>
                             <input
                               name="birthDate"
                               type="date"
@@ -1034,7 +1013,9 @@ export default async function AdminPage({
                               <option value="male">남성</option>
                               <option value="female">여성</option>
                               <option value="other">기타</option>
-                              <option value="prefer_not_to_say">응답 안 함</option>
+                              <option value="prefer_not_to_say">
+                                응답 안 함
+                              </option>
                             </select>
                           </label>
                           <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white sm:col-span-2">
@@ -1048,7 +1029,11 @@ export default async function AdminPage({
                           action={removeAdminUser}
                           className="space-y-4 rounded-3xl border border-rose-200 bg-rose-50 p-5"
                         >
-                          <input type="hidden" name="id" value={selectedUser.id} />
+                          <input
+                            type="hidden"
+                            name="id"
+                            value={selectedUser.id}
+                          />
                           <input
                             type="hidden"
                             name="userPage"
@@ -1088,6 +1073,7 @@ export default async function AdminPage({
                     <aside className="flex shrink-0 flex-row gap-2 lg:w-40 lg:flex-col lg:border-l lg:border-slate-200 lg:pl-5">
                       <Link
                         href={getUserHref(selectedUser.id, "charge")}
+                        scroll={false}
                         className={`rounded-2xl px-4 py-3 text-center text-sm font-semibold transition ${
                           userMode === "charge"
                             ? "bg-primary text-primary-foreground"
@@ -1398,50 +1384,7 @@ export default async function AdminPage({
                 조회된 충전이력이 없습니다.
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">처리일시</th>
-                      <th className="px-4 py-3">이메일</th>
-                      <th className="px-4 py-3 text-right">충전 함포</th>
-                      <th className="px-4 py-3 text-right">결제금액</th>
-                      <th className="px-4 py-3 text-right">충전 전</th>
-                      <th className="px-4 py-3 text-right">충전 후</th>
-                      <th className="px-4 py-3">상태</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {pagedHampoHistories.map((history) => (
-                      <tr key={history.id} className="bg-white">
-                        <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                          {formatDate(history.createdAt)}
-                        </td>
-                        <td className="max-w-56 break-all px-4 py-3 font-medium text-slate-900">
-                          {history.email || "-"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-primary">
-                          +{history.amount.toLocaleString("ko-KR")}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right">
-                          {history.paymentAmount.toLocaleString("ko-KR")}원
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right">
-                          {history.previousBalance.toLocaleString("ko-KR")}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">
-                          {history.balanceAfter.toLocaleString("ko-KR")}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                            {history.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <AdminHampoChargeTable histories={pagedHampoHistories} />
             )}
 
             {hampoTotalPages > 1 ? (

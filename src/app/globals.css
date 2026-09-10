@@ -132,6 +132,15 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
+  a[href],
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
   h1,
   h2,
   h3,

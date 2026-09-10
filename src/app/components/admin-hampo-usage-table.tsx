@@ -22,6 +22,7 @@ type UsageHistory = {
   refundRequestStatus: "none" | "pending";
   refundRequestId: string | null;
   refundedAmount: number;
+  source: string;
   createdAt: string;
 };
 
@@ -103,9 +104,9 @@ function RefundModal({
         </div>
 
         <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-          결제일부터 환불 완료일까지를 사용일로 계산하며, 결제 당일 환불도
-          1일 사용으로 처리합니다. 해당 결제월의 일수로 일할 계산한 뒤 소수점
-          이하 함포는 버립니다.
+          결제일부터 환불 완료일까지를 사용일로 계산하며, 결제 당일 환불도 1일
+          사용으로 처리합니다. 해당 결제월의 일수로 일할 계산한 뒤 소수점 이하
+          함포는 버립니다.
         </div>
 
         <dl className="mt-5 grid grid-cols-2 gap-3">
@@ -215,8 +216,9 @@ export function AdminHampoUsageTable({
   histories: UsageHistory[];
   refundPreviews: Record<string, RefundPreview>;
 }) {
-  const [selectedHistory, setSelectedHistory] =
-    useState<UsageHistory | null>(null);
+  const [selectedHistory, setSelectedHistory] = useState<UsageHistory | null>(
+    null,
+  );
   const selectedRefundPreview = selectedHistory?.refundRequestId
     ? refundPreviews[selectedHistory.refundRequestId]
     : undefined;
@@ -239,7 +241,13 @@ export function AdminHampoUsageTable({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {histories.map((history) => {
+              const isChargeRefund = history.source === "toss_charge_refund";
+              const isManualReclaim =
+                history.source === "manual_charge_reclaim";
+              const isChargeBalanceReduction =
+                isChargeRefund || isManualReclaim;
               const canRefund =
+                !isChargeBalanceReduction &&
                 history.refundRequestStatus === "pending" &&
                 Boolean(history.refundRequestId);
               return (
@@ -294,22 +302,28 @@ export function AdminHampoUsageTable({
                   <td className="whitespace-nowrap px-4 py-3">
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        history.refundRequestStatus === "pending"
-                          ? "bg-blue-50 text-blue-700"
-                          : history.refundStatus === "full"
-                            ? "bg-slate-200 text-slate-700"
-                            : history.refundStatus === "partial"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-emerald-50 text-emerald-700"
+                        isChargeBalanceReduction
+                          ? "bg-rose-50 text-rose-700"
+                          : history.refundRequestStatus === "pending"
+                            ? "bg-blue-50 text-blue-700"
+                            : history.refundStatus === "full"
+                              ? "bg-slate-200 text-slate-700"
+                              : history.refundStatus === "partial"
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-emerald-50 text-emerald-700"
                       }`}
                     >
-                      {history.refundRequestStatus === "pending"
-                        ? "환불 요청중"
-                        : history.refundStatus === "full"
-                          ? `환불 완료 ${history.refundedAmount.toLocaleString("ko-KR")}함포`
-                          : history.refundStatus === "partial"
-                            ? `부분 환불 ${history.refundedAmount.toLocaleString("ko-KR")}함포`
-                            : "환불 가능"}
+                      {isChargeBalanceReduction
+                        ? isManualReclaim
+                          ? "수동 충전 회수"
+                          : "충전 결제 환불"
+                        : history.refundRequestStatus === "pending"
+                          ? "환불 요청중"
+                          : history.refundStatus === "full"
+                            ? `환불 완료 ${history.refundedAmount.toLocaleString("ko-KR")}함포`
+                            : history.refundStatus === "partial"
+                              ? `부분 환불 ${history.refundedAmount.toLocaleString("ko-KR")}함포`
+                              : "환불 가능"}
                     </span>
                   </td>
                 </tr>

@@ -1,0 +1,206 @@
+import "server-only";
+
+import { createHmac, randomUUID } from "node:crypto";
+
+import { getFirebaseAdminDb } from "@/lib/firebase-admin";
+
+const PAYMENT_ORDERS_COLLECTION = "toss_payment_orders";
+const USERS_COLLECTION = "users";
+const HAMPO_CHARGE_HISTORIES_COLLECTION = "hampo_charge_histories";
+const HAMPO_UNIT_PRICE = 100;
+
+export type TossPaymentOrder = {
+  orderId: string;
+  userId: string;
+  amount: number;
+  hampoAmount: number;
+  status: "pending" | "completed";
+  createdAt: string;
+};
+
+function requireDb() {
+  const db = getFirebaseAdminDb();
+  if (!db) throw new Error("Firebase Admin 설정이 필요합니다.");
+  return db;
+}
+
+function requireTossSecretKey() {
+  const secretKey = process.env.TOSS_PAYMENTS_SECRET_KEY?.trim();
+  if (!secretKey)
+    throw new Error("TOSS_PAYMENTS_SECRET_KEY가 설정되지 않았습니다.");
+  return secretKey;
+}
+
+export function getTossClientKey() {
+  const clientKey = process.env.NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY?.trim();
+  if (!clientKey) {
+    throw new Error(
+      "NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY가 설정되지 않았습니다.",
+    );
+  }
+  return clientKey;
+}
+
+export function createTossCustomerKey(userId: string) {
+  const secret =
+    process.env.AUTH_SESSION_SECRET || "dev-only-auth-session-secret-change-me";
+  const digest = createHmac("sha256", secret)
+    .update(userId)
+    .digest("base64url");
+  return `hams_${digest.slice(0, 40)}`;
+}
+
+export async function createTossPaymentOrder(
+  userId: string,
+  hampoAmount: number,
+) {
+  const db = requireDb();
+  const orderId = `hampo_${randomUUID().replaceAll("-", "")}`;
+  const order: TossPaymentOrder = {
+    orderId,
+    userId,
+    hampoAmount,
+    amount: hampoAmount * HAMPO_UNIT_PRICE,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+
+  await db.collection(PAYMENT_ORDERS_COLLECTION).doc(orderId).create(order);
+  return order;
+}
+
+export async function getTossPaymentOrder(orderId: string) {
+  const snapshot = await requireDb()
+    .collection(PAYMENT_ORDERS_COLLECTION)
+    .doc(orderId)
+    .get();
+  return snapshot.exists ? (snapshot.data() as TossPaymentOrder) : null;
+}
+
+async function requestToss(path: string, init?: RequestInit) {
+  const authorization = Buffer.from(`${requireTossSecretKey()}:`).toString(
+    "base64",
+  );
+  return fetch(`https://api.tosspayments.com/v1${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Basic ${authorization}`,
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+    cache: "no-store",
+  });
+}
+
+export async function approveTossPayment(input: {
+  paymentKey: string;
+  orderId: string;
+  amount: number;
+}) {
+  let response = await requestToss("/payments/confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  // 승인은 성공했지만 서버 저장만 실패한 경우 재시도할 수 있도록 결제 상태를 조회한다.
+  if (!response.ok) {
+    const lookup = await requestToss(
+      `/payments/${encodeURIComponent(input.paymentKey)}`,
+    );
+    if (lookup.ok) response = lookup;
+  }
+
+  const result = (await response.json()) as {
+    code?: string;
+    message?: string;
+    status?: string;
+    orderId?: string;
+    totalAmount?: number;
+    method?: string;
+  };
+
+  if (
+    !response.ok ||
+    result.status !== "DONE" ||
+    result.orderId !== input.orderId ||
+    result.totalAmount !== input.amount
+  ) {
+    throw new Error(result.message || "토스페이먼츠 결제 승인에 실패했습니다.");
+  }
+
+  return result;
+}
+
+export async function completeTossHampoCharge(input: {
+  userId: string;
+  orderId: string;
+  paymentKey: string;
+  method: string;
+}) {
+  const db = requireDb();
+  const orderRef = db.collection(PAYMENT_ORDERS_COLLECTION).doc(input.orderId);
+  const userRef = db.collection(USERS_COLLECTION).doc(input.userId);
+  const historyRef = db
+    .collection(HAMPO_CHARGE_HISTORIES_COLLECTION)
+    .doc(input.orderId);
+
+  return db.runTransaction(async (transaction) => {
+    const [orderSnapshot, userSnapshot] = await Promise.all([
+      transaction.get(orderRef),
+      transaction.get(userRef),
+    ]);
+
+    if (!orderSnapshot.exists || !userSnapshot.exists) {
+      throw new Error("결제 주문 또는 사용자 정보를 찾을 수 없습니다.");
+    }
+
+    const order = orderSnapshot.data() as TossPaymentOrder;
+    const storedBalance = userSnapshot.data()?.hampoBalance;
+    const currentBalance =
+      typeof storedBalance === "number" && Number.isSafeInteger(storedBalance)
+        ? Math.max(0, storedBalance)
+        : 0;
+
+    if (order.userId !== input.userId)
+      throw new Error("결제 주문의 사용자가 다릅니다.");
+    if (order.status === "completed") return currentBalance;
+
+    const nextBalance = currentBalance + order.hampoAmount;
+    if (!Number.isSafeInteger(nextBalance)) {
+      throw new Error("보유 가능한 함포 한도를 초과했습니다.");
+    }
+
+    const completedAt = new Date().toISOString();
+    transaction.update(userRef, {
+      hampoBalance: nextBalance,
+      updatedAt: completedAt,
+    });
+    transaction.update(orderRef, {
+      status: "completed",
+      paymentKey: input.paymentKey,
+      paymentMethod: input.method,
+      completedAt,
+    });
+    transaction.set(historyRef, {
+      id: historyRef.id,
+      userId: input.userId,
+      email: String(userSnapshot.data()?.email ?? ""),
+      type: "charge",
+      status: "completed",
+      amount: order.hampoAmount,
+      previousBalance: currentBalance,
+      balanceAfter: nextBalance,
+      unitPrice: HAMPO_UNIT_PRICE,
+      paymentAmount: order.amount,
+      paymentStatus: "paid",
+      paymentProvider: "toss_payments",
+      paymentKey: input.paymentKey,
+      orderId: input.orderId,
+      paymentMethod: input.method,
+      source: "toss_card_payment",
+      createdAt: completedAt,
+    });
+
+    return nextBalance;
+  });
+}

@@ -35,7 +35,7 @@ import {
   type HampoRefundFilter,
 } from "@/lib/store/hampo-usage-history-store";
 import { listUsers } from "@/lib/store/user-store";
-import { calculateProratedHampoRefund } from "@/lib/hampo/refund-policy";
+import { calculateHampoUsageRefund } from "@/lib/hampo/refund-policy";
 
 const ADMIN_TABS = [
   { key: "terms", label: "이용약관", icon: ScrollText },
@@ -160,9 +160,10 @@ export default async function AdminPage({
       0,
       history.refundableAmount - history.refundedAmount,
     );
-    const calculation = calculateProratedHampoRefund(
+    const calculation = calculateHampoUsageRefund(
       remainingAmount,
       history.createdAt,
+      history.source,
     );
     const current = previews[history.refundRequestId] ?? {
       originalAmount: 0,

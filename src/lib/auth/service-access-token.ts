@@ -4,7 +4,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { findUserById } from "@/lib/store/user-store";
 
-export type ServiceAccessScope = "ai:models" | "ai:generate";
+export type ServiceAccessScope =
+  | "ai:models"
+  | "ai:generate"
+  | "hampo:consume";
 
 type ServiceAccessTokenPayload = {
   version: 1;
@@ -77,7 +80,7 @@ export function createServiceAccessToken(input: {
 
 export function verifyServiceAccessToken(
   token: string | null | undefined,
-  requiredScope: ServiceAccessScope,
+  requiredScope?: ServiceAccessScope,
 ) {
   if (!token) return null;
   const [body, signature] = token.split(".");
@@ -94,7 +97,7 @@ export function verifyServiceAccessToken(
       !payload.userId ||
       payload.expiresAt < Date.now() ||
       !Array.isArray(payload.scopes) ||
-      !payload.scopes.includes(requiredScope)
+      (requiredScope && !payload.scopes.includes(requiredScope))
     ) {
       return null;
     }
@@ -102,6 +105,20 @@ export function verifyServiceAccessToken(
   } catch {
     return null;
   }
+}
+
+export async function verifyActiveServiceToken(
+  token: string | null | undefined,
+) {
+  const access = verifyServiceAccessToken(token);
+  if (!access) return null;
+
+  const user = await findUserById(access.userId);
+  const membership = user?.serviceMemberships.find(
+    (item) => item.clientId === access.clientId,
+  );
+  if (membership?.status === "refund_pending") return null;
+  return access;
 }
 
 export async function verifyActiveServiceAccessToken(

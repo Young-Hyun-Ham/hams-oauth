@@ -1,5 +1,6 @@
 "use server";
 
+import { createHmac } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -17,6 +18,7 @@ import {
 } from "@/lib/store/admin-terms-store";
 import {
   deleteServiceSite,
+  listServiceSites,
   upsertServiceSite,
 } from "@/lib/store/service-site-store";
 import {
@@ -24,9 +26,43 @@ import {
   completeUserServiceRefund,
   deleteUserById,
   findUserById,
+  getUserServiceRefundCleanup,
   listUsers,
   updateUserByAdmin,
 } from "@/lib/store/user-store";
+
+async function deleteRefundedServiceAssets(refundRequestId: string) {
+  const cleanup = await getUserServiceRefundCleanup(refundRequestId);
+  if (cleanup.items.length === 0) return;
+  const site = (await listServiceSites()).find(
+    (item) => item.clientId === cleanup.clientId,
+  );
+  if (!site?.url || !site.clientSecret) {
+    throw new Error("환불 대상 서비스의 URL 또는 SSO Client Secret이 없습니다.");
+  }
+  const raw = JSON.stringify({
+    refundRequestId,
+    userId: cleanup.userId,
+    items: cleanup.items,
+  });
+  const timestamp = String(Date.now());
+  const signature = createHmac("sha256", site.clientSecret)
+    .update(`${timestamp}.${raw}`)
+    .digest("hex");
+  const response = await fetch(new URL("/api/sso/hampo/refund", site.url), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Hams-Timestamp": timestamp,
+      "X-Hams-Signature": signature,
+    },
+    body: raw,
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error("서비스의 환불 이미지 삭제에 실패해 환불을 중단했습니다.");
+  }
+}
 
 function readString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -520,6 +556,8 @@ export async function completeAdminHampoRefund(
         message: "일할 계산 환불금과 서비스 해지 내용을 확인해 주세요.",
       };
     }
+
+    await deleteRefundedServiceAssets(refundRequestId);
 
     const result = await completeUserServiceRefund({
       refundRequestId,

@@ -76,3 +76,22 @@ export function calculateProratedHampoRefund(
     refundAmount,
   };
 }
+
+export function calculateHampoUsageRefund(
+  amount: number,
+  usedAt: string,
+  source: string,
+  completedAt: string | Date = new Date(),
+): ProratedRefundCalculation {
+  if (source === "drawing_image") {
+    const originalAmount = Math.max(0, Math.floor(amount));
+    return {
+      originalAmount,
+      usedDays: 0,
+      daysInMonth: 0,
+      usedAmount: 0,
+      refundAmount: originalAmount,
+    };
+  }
+  return calculateProratedHampoRefund(amount, usedAt, completedAt);
+}

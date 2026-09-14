@@ -1,5 +1,5 @@
 // hams-oauth/src/lib/store/user-store.ts
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import type { Timestamp } from "firebase-admin/firestore";
 
@@ -13,7 +13,7 @@ import type {
   ServicePlan,
 } from "@/lib/auth/types";
 import { getFirebaseAdminDb, hasFirebaseAdminConfig } from "@/lib/firebase-admin";
-import { calculateProratedHampoRefund } from "@/lib/hampo/refund-policy";
+import { calculateHampoUsageRefund } from "@/lib/hampo/refund-policy";
 import { decryptApiKey, encryptApiKey } from "@/lib/security/api-key";
 
 const USERS_COLLECTION = "users";
@@ -155,6 +155,107 @@ export async function findUserById(id: string) {
   }
 
   return mapFirestoreUser(snapshot.id, snapshot.data() ?? {});
+}
+
+export async function consumeUserHampo(input: {
+  userId: string;
+  clientId: string;
+  amount: number;
+  source: string;
+  referenceId: string;
+  description: string;
+}) {
+  if (!Number.isSafeInteger(input.amount) || input.amount < 1) {
+    throw new Error("invalid_hampo_amount");
+  }
+
+  const db = requireDb();
+  const userRef = db.collection(USERS_COLLECTION).doc(input.userId);
+  const historyId = createHash("sha256")
+    .update(`${input.clientId}:${input.referenceId}`)
+    .digest("hex");
+  const historyRef = db
+    .collection(HAMPO_USAGE_HISTORIES_COLLECTION)
+    .doc(historyId);
+  const serviceSiteSnapshot = await db
+    .collection("service_sites")
+    .where("clientId", "==", input.clientId)
+    .limit(1)
+    .get();
+  const serviceSite = serviceSiteSnapshot.docs[0];
+
+  return db.runTransaction(async (transaction) => {
+    const [userSnapshot, historySnapshot] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(historyRef),
+    ]);
+    if (historySnapshot.exists) {
+      const history = historySnapshot.data();
+      if (
+        history?.userId !== input.userId ||
+        history?.clientId !== input.clientId ||
+        history?.amount !== input.amount
+      ) {
+        throw new Error("hampo_reference_conflict");
+      }
+      return {
+        balance: Number(history.balanceAfter ?? 0),
+        transactionId: historyId,
+        alreadyConsumed: true,
+      };
+    }
+    if (!userSnapshot.exists) throw new Error("user_not_found");
+
+    const data = userSnapshot.data() ?? {};
+    const currentBalance = Number(data.hampoBalance ?? 0);
+    if (!Number.isSafeInteger(currentBalance) || currentBalance < input.amount) {
+      throw new Error("insufficient_hampo");
+    }
+    const membership = Array.isArray(data.serviceMemberships)
+      ? (data.serviceMemberships as ServiceMembership[]).find(
+          (item) => item.clientId === input.clientId,
+        )
+      : undefined;
+    if (membership?.status === "refund_pending") {
+      throw new Error("service_membership_required");
+    }
+
+    const balanceAfter = currentBalance - input.amount;
+    const updatedAt = new Date().toISOString();
+    transaction.update(userRef, { hampoBalance: balanceAfter, updatedAt });
+    transaction.set(historyRef, {
+      id: historyId,
+      originalTransactionId: historyId,
+      userId: input.userId,
+      email: String(data.email ?? ""),
+      serviceSiteId: membership?.serviceSiteId ?? serviceSite?.id ?? input.clientId,
+      clientId: input.clientId,
+      serviceName:
+        membership?.serviceName ??
+        String(serviceSite?.data()?.name ?? input.clientId),
+      plan: membership?.plan ?? "basic",
+      amount: input.amount,
+      refundableAmount: input.amount,
+      previousBalance: currentBalance,
+      balanceAfter,
+      unitPrice: HAMPO_UNIT_PRICE,
+      paymentAmount: input.amount * HAMPO_UNIT_PRICE,
+      source: input.source,
+      description: input.description,
+      referenceId: input.referenceId,
+      status: "completed",
+      refundStatus: "none",
+      refundRequestStatus: "none",
+      refundRequestId: null,
+      refundedAmount: 0,
+      refundedPaymentAmount: 0,
+      refundedAt: null,
+      refundTransactionIds: [],
+      createdAt: updatedAt,
+      updatedAt,
+    });
+    return { balance: balanceAfter, transactionId: historyId, alreadyConsumed: false };
+  });
 }
 
 export async function listUsers() {
@@ -843,9 +944,10 @@ export async function completeUserServiceRefund(input: {
         0,
         Math.floor(refundableAmount - alreadyRefundedAmount),
       );
-      const calculation = calculateProratedHampoRefund(
+      const calculation = calculateHampoUsageRefund(
         remainingAmount,
         String(usage.createdAt ?? request.requestedAt ?? completedAt),
+        String(usage.source ?? ""),
         completedAt,
       );
       const unitPrice = Number(usage.unitPrice ?? HAMPO_UNIT_PRICE);
@@ -959,6 +1061,46 @@ export async function completeUserServiceRefund(input: {
       balanceAfter: nextBalance,
     };
   });
+}
+
+export async function getUserServiceRefundCleanup(refundRequestId: string) {
+  const db = requireDb();
+  const requestSnapshot = await db
+    .collection(HAMPO_REFUND_REQUESTS_COLLECTION)
+    .doc(refundRequestId)
+    .get();
+  if (!requestSnapshot.exists || requestSnapshot.data()?.status !== "pending") {
+    throw new Error("환불 요청을 찾을 수 없거나 이미 처리되었습니다.");
+  }
+  const request = requestSnapshot.data() ?? {};
+  const usageHistoryIds = Array.isArray(request.usageHistoryIds)
+    ? request.usageHistoryIds.map(String).filter(Boolean)
+    : [];
+  const usageSnapshots = await Promise.all(
+    usageHistoryIds.map((id) =>
+      db.collection(HAMPO_USAGE_HISTORIES_COLLECTION).doc(id).get(),
+    ),
+  );
+  return {
+    userId: String(request.userId ?? ""),
+    clientId: String(request.clientId ?? ""),
+    items: usageSnapshots
+      .filter((snapshot) => snapshot.exists)
+      .map((snapshot): Record<string, unknown> => ({
+        ...(snapshot.data() as Record<string, unknown>),
+        id: snapshot.id,
+      }))
+      .filter(
+        (usage) =>
+          usage.source === "drawing_image" &&
+          typeof usage.referenceId === "string" &&
+          usage.referenceId,
+      )
+      .map((usage) => ({
+        transactionId: String(usage.id),
+        referenceId: String(usage.referenceId),
+      })),
+  };
 }
 
 export async function chargeUserHampo(

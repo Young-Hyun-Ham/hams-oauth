@@ -227,6 +227,14 @@ async function getClient(clientId: string) {
   return clients.find((item) => item.clientId === clientId) ?? null;
 }
 
+export async function verifySsoClientCredentials(
+  clientId: string,
+  clientSecret: string,
+) {
+  const client = clientId ? await getClient(clientId) : null;
+  return !!client && !!clientSecret && safeEqual(client.clientSecret, clientSecret);
+}
+
 function getEncryptionKey(secret: string) {
   return createHash("sha256").update(secret).digest();
 }
@@ -498,7 +506,7 @@ export async function exchangeAuthorizationCode(
     const { accessToken, expiresIn } = createServiceAccessToken({
       clientId: input.clientId,
       userId: user.id,
-      scopes: ["ai:models", "ai:generate"],
+      scopes: ["ai:models", "ai:generate", "hampo:consume"],
     });
 
     return {

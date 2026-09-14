@@ -5,6 +5,7 @@ import {
   verifyActiveServiceToken,
 } from "@/lib/auth/service-access-token";
 import { consumeUserHampo } from "@/lib/store/user-store";
+import { verifySsoClientCredentials } from "@/lib/auth/sso";
 
 export const runtime = "nodejs";
 
@@ -12,7 +13,27 @@ const validText = (value: string, maxLength: number) =>
   value.length > 0 && value.length <= maxLength && !/[\u0000-\u001f]/.test(value);
 
 export async function POST(request: Request) {
-  const access = await verifyActiveServiceToken(readBearerToken(request));
+  let access = await verifyActiveServiceToken(readBearerToken(request));
+  if (!access) {
+    const clientId = request.headers.get("x-hams-client-id")?.trim() ?? "";
+    const clientSecret =
+      request.headers.get("x-hams-client-secret")?.trim() ?? "";
+    const userId = request.headers.get("x-hams-user-id")?.trim() ?? "";
+    if (
+      userId &&
+      (await verifySsoClientCredentials(clientId, clientSecret))
+    ) {
+      access = {
+        version: 1,
+        audience: "hams-sso-service",
+        clientId,
+        userId,
+        scopes: ["hampo:consume"],
+        issuedAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+      };
+    }
+  }
   if (!access) {
     return NextResponse.json(
       { ok: false, error: "invalid_service_access_token" },

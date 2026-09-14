@@ -25,7 +25,7 @@ function requireDb() {
   return db;
 }
 
-function requireTossSecretKey() {
+export function getTossSecretKey() {
   const secretKey = process.env.TOSS_PAYMENTS_SECRET_KEY?.trim();
   if (!secretKey)
     throw new Error("TOSS_PAYMENTS_SECRET_KEY가 설정되지 않았습니다.");
@@ -79,7 +79,7 @@ export async function getTossPaymentOrder(orderId: string) {
 }
 
 async function requestToss(path: string, init?: RequestInit) {
-  const authorization = Buffer.from(`${requireTossSecretKey()}:`).toString(
+  const authorization = Buffer.from(`${getTossSecretKey()}:`).toString(
     "base64",
   );
   return fetch(`https://api.tosspayments.com/v1${path}`, {
@@ -91,51 +91,6 @@ async function requestToss(path: string, init?: RequestInit) {
     },
     cache: "no-store",
   });
-}
-
-export async function approveTossPayment(input: {
-  paymentKey: string;
-  orderId: string;
-  amount: number;
-}) {
-  let response = await requestToss("/payments/confirm", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-
-  // 승인은 성공했지만 서버 저장만 실패한 경우 재시도할 수 있도록 결제 상태를 조회한다.
-  if (!response.ok) {
-    const lookup = await requestToss(
-      `/payments/${encodeURIComponent(input.paymentKey)}`,
-    );
-    if (lookup.ok) response = lookup;
-  }
-
-  const result = (await response.json()) as {
-    code?: string;
-    message?: string;
-    status?: string;
-    orderId?: string;
-    totalAmount?: number;
-    method?: string;
-    card?: {
-      issuerCode?: string;
-      acquirerCode?: string | null;
-      number?: string;
-      approveNo?: string;
-    } | null;
-  };
-
-  if (
-    !response.ok ||
-    result.status !== "DONE" ||
-    result.orderId !== input.orderId ||
-    result.totalAmount !== input.amount
-  ) {
-    throw new Error(result.message || "토스페이먼츠 결제 승인에 실패했습니다.");
-  }
-
-  return result;
 }
 
 export async function completeTossHampoCharge(input: {

@@ -1,4 +1,10 @@
-import { PaymentConfirmation } from "./payment-confirmation";
+import { TossPaymentSuccessPage as SharedTossPaymentSuccessPage } from "@hams-fam/sso-client/payments/react";
+
+function loginReturnUrl(value: string | string[] | undefined) {
+  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//")
+    ? value
+    : "/login";
+}
 
 export default async function TossPaymentSuccessPage({
   searchParams,
@@ -9,10 +15,11 @@ export default async function TossPaymentSuccessPage({
   const value = (key: string) =>
     typeof params[key] === "string" ? params[key] : "";
   return (
-    <PaymentConfirmation
+    <SharedTossPaymentSuccessPage
       paymentKey={value("paymentKey")}
       orderId={value("orderId")}
       amount={value("amount")}
+      loginReturnUrl={loginReturnUrl(params.returnTo)}
     />
   );
 }

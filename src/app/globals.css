@@ -1,5 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Playfair+Display:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap");
-@import "tailwindcss";
+@import "../../node_modules/tailwindcss/index.css";
 
 @custom-variant dark (&:is(.dark *));
 

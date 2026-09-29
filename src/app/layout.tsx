@@ -7,6 +7,19 @@ import { AuthStoreHydrator } from "./components/auth-store-hydrator";
 export const metadata: Metadata = {
   title: "Hams OAuth",
   description: "Hams 사이트 통합 로그인 시스템",
+  applicationName: "Hams OAuth",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/favicon.svg",
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export default async function RootLayout({
